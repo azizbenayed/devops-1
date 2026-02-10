@@ -1,2 +1,5 @@
 node_modules
 rest-client.http
+.git
+.env
+npm-debug.log

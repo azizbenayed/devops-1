@@ -14,11 +14,21 @@ app.set("trust proxy", true);
 app.use(json());
 app.use(cookieParser());
 
+// ✅ ROUTE HEALTH (AVANT app.all("*"))
+app.get("/health", (req, res) => {
+  res.status(200).send({
+    status: "OK",
+    service: "auth-service",
+  });
+});
+
+// Routes métier
 app.use(currentUserRouter);
 app.use(signinRouter);
 app.use(signoutRouter);
 app.use(signupRouter);
 
+// ❌ Catch-all TOUJOURS EN DERNIER
 app.all("*", async (req, res) => {
   throw new NotFoundError();
 });
@@ -26,3 +36,4 @@ app.all("*", async (req, res) => {
 app.use(errorHandler);
 
 export { app };
+
