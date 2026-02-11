@@ -31,10 +31,35 @@ pipeline {
                 }
             }
         }
+         
+        stage('Dependency Check') {
+    steps {
+        script {
+            def odcHome = tool 'dependency-check'
+            sh """
+                ${odcHome}/bin/dependency-check.sh \
+                --project devops-1 \
+                --scan . \
+                --format HTML \
+                --out dependency-check-report
+            """
+        }
+
+        publishHTML([
+            reportName: 'Dependency Check Report',
+            reportDir: 'dependency-check-report',
+            reportFiles: 'dependency-check-report.html',
+            keepAll: true,
+            alwaysLinkToLastBuild: true,
+            allowMissing: false
+        ])
+    }
+}
+
 
         stage('Build Docker Image') {
             steps {
-                echo '🐳 Building Docker image...'
+               echo '🐳 Building Docker image...'
                 sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
             }
         }
@@ -63,6 +88,53 @@ pipeline {
                 '''
             }
         }
+
+        stage('Generate HTML Report') {
+            steps {
+                script {
+                    def buildStatus = currentBuild.currentResult
+                    def nodeVersion = sh(script: "node -v", returnStdout: true).trim()
+
+                    writeFile file: 'report.html', text: """
+                    <html>
+                    <head>
+                        <title>CI Pipeline Report</title>
+                        <style>
+                            body { font-family: Arial; background: #f4f4f4; padding: 20px; }
+                            h1 { color: #333; }
+                            .success { color: green; font-weight: bold; }
+                            .failure { color: red; font-weight: bold; }
+                            .box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0px 0px 10px #ccc; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="box">
+                            <h1>🚀 CI Pipeline Report</h1>
+                            <p><strong>Project:</strong> devops-1</p>
+                            <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
+                            <p><strong>Date:</strong> ${new Date()}</p>
+                            <p><strong>Node Version:</strong> ${nodeVersion}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="${buildStatus == 'SUCCESS' ? 'success' : 'failure'}">
+                                    ${buildStatus}
+                                </span>
+                            </p>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                }
+
+                publishHTML([
+                    reportName: 'CI Report',
+                    reportDir: '.',
+                    reportFiles: 'report.html',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: false
+                ])
+            }
+        }
     }
 
     post {
@@ -78,3 +150,4 @@ pipeline {
         }
     }
 }
+
