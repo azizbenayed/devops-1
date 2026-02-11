@@ -1,7 +1,7 @@
 pipeline {
     agent any
-    
-     tools {
+
+    tools {
         nodejs 'node18'
     }
 
@@ -13,48 +13,36 @@ pipeline {
 
     stages {
 
-        stage('Checkout Source Code') {
-            steps {
-                echo '📥 Cloning repository from GitHub...'
-                git branch: 'main',
-                    url: 'https://github.com/azizbenayed/devops-1.git'
-            }
-        }
-
         stage('Install Dependencies') {
             steps {
                 echo '📦 Installing Node.js dependencies...'
+                sh 'node -v'
                 sh 'npm install'
             }
         }
 
         stage('SonarQube Analysis') {
-    steps {
-        script {
-            def scannerHome = tool 'sonar-scanner'
-            withSonarQubeEnv('sonarqube') {
-                sh "${scannerHome}/bin/sonar-scanner"
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonarqube') {
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
             }
         }
-    }
-}
-
 
         stage('Build Docker Image') {
             steps {
                 echo '🐳 Building Docker image...'
-                sh '''
-                  docker build -t $IMAGE_NAME:$IMAGE_TAG .
-                '''
+                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
             }
         }
 
         stage('Trivy Security Scan') {
             steps {
                 echo '🔐 Scanning Docker image with Trivy...'
-                sh '''
-                  trivy image --severity CRITICAL --exit-code 1 $IMAGE_NAME:$IMAGE_TAG
-                '''
+                sh 'trivy image --severity CRITICAL --exit-code 1 $IMAGE_NAME:$IMAGE_TAG'
             }
         }
 
@@ -69,9 +57,9 @@ pipeline {
                     -e JWT_KEY=testkey \
                     -e MONGO_URI=mongodb://mongo:27017/auth \
                     $IMAGE_NAME:$IMAGE_TAG
-                  
+
                   sleep 10
-                  curl -f http://localhost:3001/health
+                  curl -f http://localhost:3001/health || exit 1
                 '''
             }
         }
