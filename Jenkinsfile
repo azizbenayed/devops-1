@@ -77,24 +77,25 @@ pipeline {
             }
         }
 
-        stage('Smoke Test (Container Run)') {
-            steps {
-                echo '🧪 Running container smoke test...'
-                sh '''
-                  docker rm -f $CONTAINER_NAME || true
+       stage('Smoke Test (Container Run)') {
+    steps {
+        echo '🧪 Running container smoke test...'
+        sh '''
+          docker rm -f $CONTAINER_NAME || true
 
-                  docker run -d \
-                    --name $CONTAINER_NAME \
-                    -p 3001:3000 \
-                    -e JWT_KEY=testkey \
-                    -e MONGO_URI=mongodb://mongo:27017/auth \
-                    $IMAGE_NAME:$IMAGE_TAG
+          docker run -d \
+            --name $CONTAINER_NAME \
+            -p 3001:3000 \
+            -e JWT_KEY=testkey \
+            -e MONGO_URI=mongodb://127.0.0.1:27017/auth \
+            $IMAGE_NAME:$IMAGE_TAG
 
-                  sleep 10
-                  curl -f http://localhost:3001/health || exit 1
-                '''
-            }
-        }
+          sleep 10
+          curl -f http://localhost:3001 || exit 1
+        '''
+    }
+}
+
 
         stage('Generate Final HTML Report') {
             steps {
