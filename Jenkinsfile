@@ -8,7 +8,7 @@ pipeline {
     environment {
         IMAGE_NAME = "devops-1"
         IMAGE_TAG  = "1.0"
-        CONTAINER_NAME = "devops-1-ci"
+        CONTAINER_NAME = "authentication"
     }
 
     stages {
