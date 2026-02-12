@@ -77,7 +77,7 @@ pipeline {
             }
         }
 
-       stage('Smoke Test (Container Run)') {
+     stage('Smoke Test (Container Run)') {
     steps {
         echo '🧪 Running container smoke test...'
         sh '''
@@ -87,14 +87,17 @@ pipeline {
             --name $CONTAINER_NAME \
             -p 3001:3000 \
             -e JWT_KEY=testkey \
-            -e MONGO_URI=mongodb://127.0.0.1:27017/auth \
+            -e NODE_ENV=test \
             $IMAGE_NAME:$IMAGE_TAG
 
           sleep 10
+          docker logs $CONTAINER_NAME
+
           curl -f http://localhost:3001 || exit 1
         '''
     }
 }
+
 
 
         stage('Generate Final HTML Report') {
