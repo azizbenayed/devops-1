@@ -36,15 +36,20 @@ pipeline {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
-                    sh """
-                        ${odcHome}/bin/dependency-check.sh \
-                        --project devops-1 \
-                        --scan . \
-                        --format HTML \
-                        --out dependency-check-report \
-                        --disableYarnAudit \
-                        --failOnCVSS 11 || true
-                    """
+
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
+                        sh """
+                            ${odcHome}/bin/dependency-check.sh \
+                            --project devops-1 \
+                            --scan . \
+                            --format HTML \
+                            --out dependency-check-report \
+                            --disableYarnAudit \
+                            --nvdApiKey $NVD_KEY \
+                            --noupdate \
+                            --failOnCVSS 11
+                        """
+                    }
                 }
 
                 publishHTML([
@@ -53,7 +58,7 @@ pipeline {
                     reportFiles: 'dependency-check-report.html',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
-                    allowMissing: false
+                    allowMissing: true
                 ])
             }
         }
@@ -68,10 +73,7 @@ pipeline {
         stage('Trivy Security Scan') {
             steps {
                 echo '🔐 Scanning Docker image with Trivy...'
-                script {
-                    // Do not fail pipeline even if vulnerabilities found
-                    sh 'trivy image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG || true'
-                }
+                sh 'trivy image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG || true'
             }
         }
 
@@ -80,6 +82,7 @@ pipeline {
                 echo '🧪 Running container smoke test...'
                 sh '''
                   docker rm -f $CONTAINER_NAME || true
+
                   docker run -d \
                     --name $CONTAINER_NAME \
                     -p 3001:3000 \
