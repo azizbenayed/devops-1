@@ -81,10 +81,32 @@ pipeline {
                     mkdir -p trivy-report
 
                     trivy image \
-                    --format template \
-                    --template "@contrib/html.tpl" \
-                    -o trivy-report/trivy-report.html \
+                    --scanners vuln \
+                    --format json \
+                    -o trivy-report/trivy-report.json \
                     $IMAGE_NAME:$IMAGE_TAG
+
+                    cat > trivy-report/trivy-report.html <<EOF
+                    <html>
+                    <head>
+                        <title>Trivy Security Report</title>
+                        <style>
+                            body { font-family: Arial; margin: 30px; background:#f4f4f4; }
+                            pre { background:white; padding:20px; border-radius:8px; overflow:auto; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>🔐 Trivy Security Scan Report</h1>
+                        <pre>
+                    EOF
+
+                    cat trivy-report/trivy-report.json >> trivy-report/trivy-report.html
+
+                    cat >> trivy-report/trivy-report.html <<EOF
+                        </pre>
+                    </body>
+                    </html>
+                    EOF
                 '''
             }
         }
@@ -95,64 +117,6 @@ pipeline {
                     reportName: 'Trivy Security Report',
                     reportDir: 'trivy-report',
                     reportFiles: 'trivy-report.html',
-                    keepAll: true,
-                    alwaysLinkToLastBuild: true,
-                    allowMissing: false
-                ])
-            }
-        }
-
-        stage('Generate Final HTML Report') {
-            steps {
-                script {
-                    def buildStatus = currentBuild.currentResult
-                    def nodeVersion = sh(script: "node -v", returnStdout: true).trim()
-
-                    writeFile file: 'report.html', text: """
-                    <html>
-                    <head>
-                        <title>CI Pipeline Report</title>
-                        <style>
-                            body { font-family: Arial; background: #f4f4f4; padding: 30px; }
-                            h1 { color: #333; }
-                            .success { color: green; font-weight: bold; }
-                            .failure { color: red; font-weight: bold; }
-                            .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0px 0px 15px #ccc; }
-                            .section { margin-bottom: 15px; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="card">
-                            <h1>🚀 CI/CD Pipeline Report</h1>
-
-                            <div class="section"><strong>Project:</strong> devops-1</div>
-                            <div class="section"><strong>Build Number:</strong> ${env.BUILD_NUMBER}</div>
-                            <div class="section"><strong>Date:</strong> ${new Date()}</div>
-                            <div class="section"><strong>Node Version:</strong> ${nodeVersion}</div>
-
-                            <div class="section">
-                                <strong>Status:</strong> 
-                                <span class="${buildStatus == 'SUCCESS' ? 'success' : 'failure'}">
-                                    ${buildStatus}
-                                </span>
-                            </div>
-
-                            <div class="section">
-                                <p>✔ SonarQube Analysis Executed</p>
-                                <p>✔ OWASP Dependency Check Executed</p>
-                                <p>✔ Docker Image Built</p>
-                                <p>✔ Trivy Report Generated</p>
-                            </div>
-                        </div>
-                    </body>
-                    </html>
-                    """
-                }
-
-                publishHTML([
-                    reportName: 'CI Final Report',
-                    reportDir: '.',
-                    reportFiles: 'report.html',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: false
