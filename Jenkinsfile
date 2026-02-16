@@ -11,6 +11,10 @@ pipeline {
         CONTAINER_NAME = "authentication"
     }
 
+    options {
+        timestamps()
+    }
+
     stages {
 
         stage('Install Dependencies') {
@@ -46,8 +50,7 @@ pipeline {
                             --out dependency-check-report \
                             --disableYarnAudit \
                             --nvdApiKey $NVD_KEY \
-                            --noupdate \
-                            --failOnCVSS 11
+                            --failOnCVSS 7
                         """
                     }
                 }
@@ -73,13 +76,31 @@ pipeline {
         stage('Trivy Security Scan') {
             steps {
                 echo '🔐 Scanning Docker image with Trivy...'
-                sh 'trivy image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG || true'
+
+                sh '''
+                    mkdir -p trivy-report
+
+                    trivy image \
+                    --format template \
+                    --template "@contrib/html.tpl" \
+                    -o trivy-report/trivy-report.html \
+                    $IMAGE_NAME:$IMAGE_TAG
+                '''
             }
         }
 
-     
-
-
+        stage('Publish Trivy Report') {
+            steps {
+                publishHTML([
+                    reportName: 'Trivy Security Report',
+                    reportDir: 'trivy-report',
+                    reportFiles: 'trivy-report.html',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: false
+                ])
+            }
+        }
 
         stage('Generate Final HTML Report') {
             steps {
@@ -104,21 +125,10 @@ pipeline {
                         <div class="card">
                             <h1>🚀 CI/CD Pipeline Report</h1>
 
-                            <div class="section">
-                                <strong>Project:</strong> devops-1
-                            </div>
-
-                            <div class="section">
-                                <strong>Build Number:</strong> ${env.BUILD_NUMBER}
-                            </div>
-
-                            <div class="section">
-                                <strong>Date:</strong> ${new Date()}
-                            </div>
-
-                            <div class="section">
-                                <strong>Node Version:</strong> ${nodeVersion}
-                            </div>
+                            <div class="section"><strong>Project:</strong> devops-1</div>
+                            <div class="section"><strong>Build Number:</strong> ${env.BUILD_NUMBER}</div>
+                            <div class="section"><strong>Date:</strong> ${new Date()}</div>
+                            <div class="section"><strong>Node Version:</strong> ${nodeVersion}</div>
 
                             <div class="section">
                                 <strong>Status:</strong> 
@@ -131,8 +141,7 @@ pipeline {
                                 <p>✔ SonarQube Analysis Executed</p>
                                 <p>✔ OWASP Dependency Check Executed</p>
                                 <p>✔ Docker Image Built</p>
-                                <p>✔ Trivy Scan Completed</p>
-                                <p>✔ Smoke Test Executed</p>
+                                <p>✔ Trivy Report Generated</p>
                             </div>
                         </div>
                     </body>
