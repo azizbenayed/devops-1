@@ -73,43 +73,48 @@ pipeline {
             }
         }
 
-        stage('Trivy Security Scan') {
-            steps {
-                echo '🔐 Scanning Docker image with Trivy...'
+       stage('Trivy Security Scan') {
+    steps {
+        echo '🔐 Scanning Docker image with Trivy...'
 
-                sh '''
-                    mkdir -p trivy-report
+        sh '''
+            mkdir -p trivy-report
 
-                    trivy image \
-                    --scanners vuln \
-                    --format json \
-                    -o trivy-report/trivy-report.json \
-                    $IMAGE_NAME:$IMAGE_TAG
+            # Scan image -> JSON
+            trivy image \
+            --scanners vuln \
+            --format json \
+            -o trivy-report/trivy-report.json \
+            $IMAGE_NAME:$IMAGE_TAG
 
-                    cat > trivy-report/trivy-report.html <<EOF
-                    <html>
-                    <head>
-                        <title>Trivy Security Report</title>
-                        <style>
-                            body { font-family: Arial; margin: 30px; background:#f4f4f4; }
-                            pre { background:white; padding:20px; border-radius:8px; overflow:auto; }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>🔐 Trivy Security Scan Report</h1>
-                        <pre>
-                    EOF
+            # Start HTML file
+            cat > trivy-report/trivy-report.html <<EOF
+<html>
+<head>
+    <title>Trivy Security Report</title>
+    <style>
+        body { font-family: Arial; margin: 30px; background:#f4f4f4; }
+        pre { background:white; padding:20px; border-radius:8px; overflow:auto; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Trivy Security Scan Report</h1>
+    <pre>
+EOF
 
-                    cat trivy-report/trivy-report.json >> trivy-report/trivy-report.html
+            # Insert JSON content
+            cat trivy-report/trivy-report.json >> trivy-report/trivy-report.html
 
-                    cat >> trivy-report/trivy-report.html <<EOF
-                        </pre>
-                    </body>
-                    </html>
-                    EOF
-                '''
-            }
-        }
+            # Close HTML file
+            cat >> trivy-report/trivy-report.html <<EOF
+    </pre>
+</body>
+</html>
+EOF
+        '''
+    }
+}
+
 
         stage('Publish Trivy Report') {
             steps {
