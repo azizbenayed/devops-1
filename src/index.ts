@@ -32,9 +32,10 @@ const start = async () => {
       console.log("Connected to MongoDb!");
     }
 
-    app.listen(3000, () => {
-      console.log("Listening on port 3000!!!");
-    });
+    app.listen(3000, "0.0.0.0", () => {
+  console.log("Listening on port 3000!!!");
+});
+
 
   } catch (err) {
     console.error(err);
