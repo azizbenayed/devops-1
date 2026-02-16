@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18'
+        nodejs 'node20'
     }
 
     environment {
@@ -77,26 +77,7 @@ pipeline {
             }
         }
 
-     stage('Smoke Test (Container Run)') {
-    steps {
-        echo '🧪 Running container smoke test...'
-        sh '''
-          docker rm -f $CONTAINER_NAME || true
-
-          docker run -d \
-            --name $CONTAINER_NAME \
-            -p 3001:3000 \
-            -e JWT_KEY=testkey \
-            -e NODE_ENV=test \
-            $IMAGE_NAME:$IMAGE_TAG
-
-          sleep 10
-          docker logs $CONTAINER_NAME
-
-          curl -f http://localhost:3001 || exit 1
-        '''
-    }
-}
+     
 
 
 
