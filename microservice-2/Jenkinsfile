@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "devops-1"
+        IMAGE_NAME = "aziz/microservice-2"
         IMAGE_TAG  = "1.0"
         CONTAINER_NAME = "authentication"
     }
@@ -44,7 +44,7 @@ pipeline {
                     withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
                         sh """
                             ${odcHome}/bin/dependency-check.sh \
-                            --project devops-1 \
+                            --project microservice-2 \
                             --scan . \
                             --format HTML \
                             --out dependency-check-report \
