@@ -1,0 +1,41 @@
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import { app } from "./app";
+
+// Charger les variables d'environnement
+dotenv.config();
+
+const start = async () => {
+  console.log("Starting auth service...");
+
+  // Vérification des variables obligatoires
+  if (!process.env.JWT_KEY) {
+    throw new Error("JWT_KEY must be defined!");
+  }
+
+  if (!process.env.MONGO_URI) {
+    throw new Error("MONGO_URI must be defined!");
+  }
+
+  try {
+    // Connexion à MongoDB
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("Connected to MongoDB!");
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  }
+
+  // Port (compatible Docker / Kubernetes)
+  const PORT = process.env.PORT || 3000;
+
+  // IMPORTANT : 0.0.0.0 pour Docker
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Auth service listening on port ${PORT}`);
+  });
+};
+
+// Démarrage de l'application
+start();
+
+	
