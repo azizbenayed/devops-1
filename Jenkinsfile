@@ -6,10 +6,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "auth-service"
-        IMAGE_TAG  = "1.0"
-        CONTAINER_NAME = "authentication"
-        SERVICE_DIR = "auth"
+        IMAGE_TAG = "1.0"
     }
 
     options {
@@ -18,111 +15,81 @@ pipeline {
 
     stages {
 
-        stage('Install Dependencies') {
+        stage('Build All Microservices') {
             steps {
-                dir("${SERVICE_DIR}") {
-                    echo '📦 Installing Node.js dependencies...'
-                    sh 'node -v'
-                    sh 'npm install'
-                }
-            }
-        }
+                script {
 
-        stage('SonarQube Analysis') {
-            steps {
-                dir("${SERVICE_DIR}") {
-                    script {
-                        def scannerHome = tool 'sonar-scanner'
-                        withSonarQubeEnv('sonarqube') {
-                            sh "${scannerHome}/bin/sonar-scanner"
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
+
+                    for (service in services) {
+
+                        stage("Install ${service}") {
+                            dir(service) {
+                                echo "📦 Installing dependencies for ${service}"
+                                sh "npm install"
+                            }
                         }
-                    }
-                }
-            }
-        }
 
-        stage('Dependency Check (OWASP)') {
-            steps {
-                dir("${SERVICE_DIR}") {
-                    script {
-                        def odcHome = tool 'dependency-check'
+                        stage("SonarQube ${service}") {
+                            dir(service) {
+                                def scannerHome = tool 'sonar-scanner'
+                                withSonarQubeEnv('sonarqube') {
+                                    sh """
+                                        ${scannerHome}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=${service} \
+                                        -Dsonar.projectName=${service} \
+                                        -Dsonar.sources=.
+                                    """
+                                }
+                            }
+                        }
 
-                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
+                        stage("OWASP ${service}") {
+                            dir(service) {
+                                def odcHome = tool 'dependency-check'
+                                sh """
+                                    ${odcHome}/bin/dependency-check.sh \
+                                    --project ${service} \
+                                    --scan . \
+                                    --format HTML \
+                                    --out dependency-check-report
+                                """
+                            }
+                        }
+
+                        stage("Docker Build ${service}") {
+                            dir(service) {
+                                sh "docker build -t ${service}:${IMAGE_TAG} ."
+                            }
+                        }
+
+                        stage("Trivy Scan ${service}") {
                             sh """
-                                ${odcHome}/bin/dependency-check.sh \
-                                --project auth-service \
-                                --scan . \
-                                --format HTML \
-                                --out dependency-check-report \
-                                --disableYarnAudit \
-                                --nvdApiKey $NVD_KEY \
-                                --failOnCVSS 7
+                                trivy image \
+                                --scanners vuln \
+                                ${service}:${IMAGE_TAG}
                             """
                         }
                     }
-
-                    publishHTML([
-                        reportName: 'Dependency Check Report',
-                        reportDir: 'dependency-check-report',
-                        reportFiles: 'dependency-check-report.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        allowMissing: true
-                    ])
                 }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                dir("${SERVICE_DIR}") {
-                    echo '🐳 Building Docker image...'
-                    sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
-                }
-            }
-        }
-
-        stage('Trivy Security Scan') {
-            steps {
-                echo '🔐 Scanning Docker image with Trivy...'
-                sh '''
-                    mkdir -p trivy-report
-
-                    trivy image \
-                    --scanners vuln \
-                    --format json \
-                    -o trivy-report/trivy-report.json \
-                    $IMAGE_NAME:$IMAGE_TAG
-                '''
-            }
-        }
-
-        stage('Publish Trivy Report') {
-            steps {
-                publishHTML([
-                    reportName: 'Trivy Security Report',
-                    reportDir: 'trivy-report',
-                    reportFiles: 'trivy-report.json',
-                    keepAll: true,
-                    alwaysLinkToLastBuild: true,
-                    allowMissing: false
-                ])
             }
         }
     }
 
     post {
-        always {
-            echo '🧹 Cleaning test container'
-            sh 'docker rm -f $CONTAINER_NAME || true'
-        }
-
         success {
-            echo '✅ CI PIPELINE SUCCESS'
+            echo "✅ ALL MICROSERVICES BUILT SUCCESSFULLY"
         }
-
         failure {
-            echo '❌ CI PIPELINE FAILED'
+            echo "❌ PIPELINE FAILED"
         }
     }
 }
