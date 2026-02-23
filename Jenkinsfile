@@ -6,7 +6,8 @@ pipeline {
     }
 
     environment {
-        IMAGE_TAG = "1.0"
+        DOCKERHUB_USERNAME = "azizbenayed"
+        TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
     }
 
     options {
@@ -15,7 +16,75 @@ pipeline {
 
     stages {
 
-        stage('Build All Microservices') {
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
+
+                    for (service in services) {
+                        dir(service) {
+                            echo "📦 Installing ${service}"
+                            sh "npm install"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube + OWASP') {
+            steps {
+                script {
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
+
+                    for (service in services) {
+
+                        echo "🔍 Running Sonar + OWASP for ${service}"
+
+                        dir(service) {
+
+                            // SONAR
+                            def scannerHome = tool 'sonar-scanner'
+                            withSonarQubeEnv('sonarqube') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner \
+                                    -Dsonar.projectKey=${service} \
+                                    -Dsonar.projectName=${service} \
+                                    -Dsonar.sources=.
+                                """
+                            }
+
+                            // OWASP
+                            def odcHome = tool 'dependency-check'
+                            sh """
+                                ${odcHome}/bin/dependency-check.sh \
+                                --project ${service} \
+                                --scan . \
+                                --format HTML \
+                                --out dependency-check-report
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build + Push + Trivy') {
             steps {
                 script {
 
@@ -31,52 +100,33 @@ pipeline {
 
                     for (service in services) {
 
-                        stage("Install ${service}") {
-                            dir(service) {
-                                echo "📦 Installing dependencies for ${service}"
-                                sh "npm install"
-                            }
-                        }
+                        dir(service) {
 
-                        stage("SonarQube ${service}") {
-                            dir(service) {
-                                def scannerHome = tool 'sonar-scanner'
-                                withSonarQubeEnv('sonarqube') {
+                            def IMAGE_NAME = "${DOCKERHUB_USERNAME}/${service}"
+                            def FULL_IMAGE = "${IMAGE_NAME}:${TAG}"
+
+                            if (fileExists('Dockerfile')) {
+
+                                withCredentials([usernamePassword(
+                                    credentialsId: 'dockerhub-cred',
+                                    usernameVariable: 'DOCKER_USER',
+                                    passwordVariable: 'DOCKER_PASS'
+                                )]) {
+
                                     sh """
-                                        ${scannerHome}/bin/sonar-scanner \
-                                        -Dsonar.projectKey=${service} \
-                                        -Dsonar.projectName=${service} \
-                                        -Dsonar.sources=.
+                                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                                        docker build -t ${FULL_IMAGE} .
+                                        docker push ${FULL_IMAGE}
+                                        docker logout
                                     """
                                 }
-                            }
-                        }
 
-                        stage("OWASP ${service}") {
-                            dir(service) {
-                                def odcHome = tool 'dependency-check'
-                                sh """
-                                    ${odcHome}/bin/dependency-check.sh \
-                                    --project ${service} \
-                                    --scan . \
-                                    --format HTML \
-                                    --out dependency-check-report
-                                """
-                            }
-                        }
+                                echo "🔐 Running Trivy for ${FULL_IMAGE}"
+                                sh "trivy image ${FULL_IMAGE}"
 
-                        stage("Docker Build ${service}") {
-                            dir(service) {
-                                sh "docker build -t ${service}:${IMAGE_TAG} ."
+                            } else {
+                                echo "⚠️ No Dockerfile found for ${service}, skipping"
                             }
-                        }
-
-                        stage("Trivy Scan ${service}") {
-                            sh """
-                                trivy image \
-                                --scanners vuln \
-                                ${service}:${IMAGE_TAG}
-                            """
                         }
                     }
                 }
@@ -86,7 +136,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ ALL MICROSERVICES BUILT SUCCESSFULLY"
+            echo "✅ ALL MICROSERVICES PROCESSED SUCCESSFULLY"
         }
         failure {
             echo "❌ PIPELINE FAILED"
