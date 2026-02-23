@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_TAG = "1.0"
+        TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
     }
 
     options {
