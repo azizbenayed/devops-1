@@ -15,30 +15,6 @@ pipeline {
     }
 
     stages {
-
-        stage('Install Dependencies') {
-            steps {
-                script {
-                    def services = [
-                        "auth",
-                        "client",
-                        "expiration",
-                        "image",
-                        "orders",
-                        "payments",
-                        "tickets"
-                    ]
-
-                    for (service in services) {
-                        dir(service) {
-                            echo "📦 Installing ${service}"
-                            sh "npm install"
-                        }
-                    }
-                }
-            }
-        }
-
         stage('SonarQube + OWASP') {
             steps {
                 script {
