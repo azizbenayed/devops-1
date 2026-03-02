@@ -96,8 +96,8 @@ pipeline {
 
                             if (fileExists('Dockerfile')) {
 
-                                def IMAGE_NAME = "${DOCKERHUB_USERNAME}/${service}"
-                                def FULL_IMAGE = "${IMAGE_NAME}:${TAG}"
+                                def IMAGE_NAME = "${DOCKERHUB_USERNAME}/microservises-devops"
+                                def FULL_IMAGE = "${IMAGE_NAME}:${service}-${TAG}"
 
                                 echo "🐳 Building ${FULL_IMAGE}"
 
