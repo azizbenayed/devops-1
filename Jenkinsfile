@@ -7,7 +7,8 @@ pipeline {
 
     environment {
         DOCKERHUB_USERNAME = "mohamedaziz599"
-        TAG = "v${env.BUILD_NUMBER}"    }
+        TAG = "v${env.BUILD_NUMBER}"
+    }
 
     options {
         timestamps()
@@ -18,6 +19,7 @@ pipeline {
         stage('SonarQube + OWASP') {
             steps {
                 script {
+
                     def services = [
                         "auth",
                         "client",
@@ -109,8 +111,15 @@ pipeline {
                                 echo "🔐 Running Trivy scan on ${FULL_IMAGE}"
 
                                 sh """
-                                trivy image --severity HIGH,CRITICAL ${FULL_IMAGE}
+                                trivy image \
+                                --severity HIGH,CRITICAL \
+                                --format template \
+                                --template "@contrib/html.tpl" \
+                                -o trivy-report-${service}.html \
+                                ${FULL_IMAGE}
                                 """
+
+                                archiveArtifacts artifacts: "trivy-report-${service}.html", fingerprint: true
 
                             } else {
 
@@ -135,6 +144,7 @@ pipeline {
         success {
             echo "✅ ALL MICROSERVICES PROCESSED SUCCESSFULLY"
         }
+
         failure {
             echo "❌ PIPELINE FAILED"
         }
