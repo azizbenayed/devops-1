@@ -116,7 +116,7 @@ pipeline {
                                 trivy image \
                                 --severity HIGH,CRITICAL \
                                 --format template \
-                                --template "@contrib/html.tpl" \
+                                --template "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl"
                                 -o ../trivy-reports/trivy-report-${service}.html \
                                 ${FULL_IMAGE}
                                 """
