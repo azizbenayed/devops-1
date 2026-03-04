@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -114,6 +115,7 @@ pipeline {
 
                                 sh """
                                 trivy image \
+                                --scanners vuln \
                                 --severity HIGH,CRITICAL \
                                 --format template \
                                 --template "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl" \
@@ -162,4 +164,4 @@ pipeline {
         }
     }
 }
-
+```
