@@ -92,6 +92,8 @@ pipeline {
                         "tickets"
                     ]
 
+                    sh "mkdir -p trivy-reports"
+
                     for (service in services) {
 
                         dir(service) {
@@ -115,19 +117,24 @@ pipeline {
                                 --severity HIGH,CRITICAL \
                                 --format template \
                                 --template "@contrib/html.tpl" \
-                                -o trivy-report-${service}.html \
+                                -o ../trivy-reports/trivy-report-${service}.html \
                                 ${FULL_IMAGE}
                                 """
-
-                                archiveArtifacts artifacts: "trivy-report-${service}.html", fingerprint: true
-
-                            } else {
-
+                            } 
+                            else {
                                 echo "⚠️ No Dockerfile found for ${service}, skipping"
-
                             }
                         }
                     }
+
+                    publishHTML([
+                        reportDir: 'trivy-reports',
+                        reportFiles: 'trivy-report-*.html',
+                        reportName: 'Trivy Security Reports',
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        allowMissing: false
+                    ])
                 }
             }
         }
