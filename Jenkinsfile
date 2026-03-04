@@ -127,19 +127,22 @@ pipeline {
                             }
                         }
                     }
+                }
+            }
+        }
 
-                  stage('Publish Trivy Report') {
-      steps {
-        publishHTML(target: [
-            reportDir: 'trivy-reports',
-            reportFiles: 'trivy-report-*.html',
-            reportName: 'Trivy Security Reports',
-            keepAll: true,
-            alwaysLinkToLastBuild: true,
-            allowMissing: true
-        ])
-    }
-}
+
+        stage('Publish Trivy Report') {
+            steps {
+                publishHTML(target: [
+                    reportDir: 'trivy-reports',
+                    reportFiles: 'trivy-report-*.html',
+                    reportName: 'Trivy Security Reports',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: true
+                ])
+            }
         }
 
 
