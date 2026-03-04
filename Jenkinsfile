@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -127,13 +128,12 @@ pipeline {
                         }
                     }
 
-                    publishHTML([
+                    publishHTML(target: [
                         reportDir: 'trivy-reports',
                         reportFiles: 'trivy-report-*.html',
                         reportName: 'Trivy Security Reports',
                         keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        allowMissing: false
+                        alwaysLinkToLastBuild: true
                     ])
                 }
             }
@@ -157,3 +157,4 @@ pipeline {
         }
     }
 }
+```
