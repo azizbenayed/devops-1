@@ -128,17 +128,18 @@ pipeline {
                         }
                     }
 
-                    publishHTML(target: [
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'trivy-reports',
-                    reportFiles: 'trivy-report-*.html',
-                    reportName: 'Trivy Security Reports',
-                    reportTitles: 'Trivy Vulnerability Scan'
-])
-                }
-            }
+                  stage('Publish Trivy Report') {
+      steps {
+        publishHTML(target: [
+            reportDir: 'trivy-reports',
+            reportFiles: 'trivy-report-*.html',
+            reportName: 'Trivy Security Reports',
+            keepAll: true,
+            alwaysLinkToLastBuild: true,
+            allowMissing: true
+        ])
+    }
+}
         }
 
 
