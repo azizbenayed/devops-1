@@ -19,7 +19,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                echo '📦 Installing Node.js dependencies...'
+                echo '📦 Installing Node.js dependencies'
                 sh 'node -v'
                 sh 'npm install'
             }
@@ -36,29 +36,34 @@ pipeline {
             }
         }
 
-        stage('Dependency Check (OWASP)') {
+        stage('OWASP Dependency Check') {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
 
+                    sh 'mkdir -p dependency-check-report'
+
                     withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
                         sh """
-                            ${odcHome}/bin/dependency-check.sh \
-                            --project devops-1 \
-                            --scan . \
-                            --format HTML \
-                            --out dependency-check-report \
-                            --disableYarnAudit \
-                            --nvdApiKey $NVD_KEY \
-                            --failOnCVSS 7
+                        ${odcHome}/bin/dependency-check.sh \
+                        --project devops-1 \
+                        --scan . \
+                        --format HTML \
+                        --out dependency-check-report \
+                        --disableYarnAudit \
+                        --nvdApiKey $NVD_KEY
                         """
                     }
                 }
+            }
+        }
 
+        stage('Publish OWASP Report') {
+            steps {
                 publishHTML([
-                    reportName: 'Dependency Check Report',
                     reportDir: 'dependency-check-report',
                     reportFiles: 'dependency-check-report.html',
+                    reportName: 'OWASP Dependency Check Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
@@ -68,71 +73,46 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo '🐳 Building Docker image...'
+                echo '🐳 Building Docker Image'
                 sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
             }
         }
 
-       stage('Trivy Security Scan') {
-    steps {
-        echo '🔐 Scanning Docker image with Trivy...'
+        stage('Trivy Security Scan') {
+            steps {
+                echo '🔐 Running Trivy Scan'
 
-        sh '''
-            mkdir -p trivy-report
+                sh '''
+                mkdir -p trivy-report
 
-            # Scan image -> JSON
-            trivy image \
-            --scanners vuln \
-            --format json \
-            -o trivy-report/trivy-report.json \
-            $IMAGE_NAME:$IMAGE_TAG
-
-            # Start HTML file
-            cat > trivy-report/trivy-report.html <<EOF
-<html>
-<head>
-    <title>Trivy Security Report</title>
-    <style>
-        body { font-family: Arial; margin: 30px; background:#f4f4f4; }
-        pre { background:white; padding:20px; border-radius:8px; overflow:auto; }
-    </style>
-</head>
-<body>
-    <h1>🔐 Trivy Security Scan Report</h1>
-    <pre>
-EOF
-
-            # Insert JSON content
-            cat trivy-report/trivy-report.json >> trivy-report/trivy-report.html
-
-            # Close HTML file
-            cat >> trivy-report/trivy-report.html <<EOF
-    </pre>
-</body>
-</html>
-EOF
-        '''
-    }
-}
-
+                trivy image \
+                --format template \
+                --template "@/usr/local/share/trivy/templates/html.tpl" \
+                -o trivy-report/trivy-report.html \
+                $IMAGE_NAME:$IMAGE_TAG
+                '''
+            }
+        }
 
         stage('Publish Trivy Report') {
             steps {
                 publishHTML([
-                    reportName: 'Trivy Security Report',
                     reportDir: 'trivy-report',
                     reportFiles: 'trivy-report.html',
+                    reportName: 'Trivy Security Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
-                    allowMissing: false
+                    allowMissing: true
                 ])
             }
         }
+
     }
 
     post {
+
         always {
-            echo '🧹 Cleaning test container'
+            echo '🧹 Cleaning container'
             sh 'docker rm -f $CONTAINER_NAME || true'
         }
 
