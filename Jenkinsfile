@@ -15,9 +15,11 @@ pipeline {
     }
 
     stages {
+
         stage('SonarQube + OWASP') {
             steps {
                 script {
+
                     def services = [
                         "auth",
                         "client",
@@ -34,25 +36,25 @@ pipeline {
 
                         dir(service) {
 
-                            // SONAR
+                            // SonarQube
                             def scannerHome = tool 'sonar-scanner'
                             withSonarQubeEnv('sonarqube') {
                                 sh """
-                                    ${scannerHome}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=${service} \
-                                    -Dsonar.projectName=${service} \
-                                    -Dsonar.sources=.
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=${service} \
+                                -Dsonar.projectName=${service} \
+                                -Dsonar.sources=.
                                 """
                             }
 
-                            // OWASP
+                            // OWASP Dependency Check
                             def odcHome = tool 'dependency-check'
                             sh """
-                                ${odcHome}/bin/dependency-check.sh \
-                                --project ${service} \
-                                --scan . \
-                                --format HTML \
-                                --out dependency-check-report
+                            ${odcHome}/bin/dependency-check.sh \
+                            --project ${service} \
+                            --scan . \
+                            --format HTML \
+                            --out dependency-check-report
                             """
                         }
                     }
@@ -90,15 +92,26 @@ pipeline {
                                 )]) {
 
                                     sh """
-                                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                                        docker build -t ${FULL_IMAGE} .
-                                        docker push ${FULL_IMAGE}
-                                        docker logout
+                                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                                    docker build -t ${FULL_IMAGE} .
+                                    docker push ${FULL_IMAGE}
+                                    docker logout
                                     """
                                 }
 
-                                echo "🔐 Running Trivy for ${FULL_IMAGE}"
-                                sh "trivy image ${FULL_IMAGE}"
+                                echo "🔐 Running Trivy scan for ${FULL_IMAGE}"
+
+                                sh """
+                                mkdir -p ../trivy-reports
+
+                                trivy image \
+                                --scanners vuln \
+                                --severity HIGH,CRITICAL \
+                                --format template \
+                                --template "@/usr/local/share/trivy/templates/html.tpl" \
+                                -o ../trivy-reports/trivy-${service}.html \
+                                ${FULL_IMAGE}
+                                """
 
                             } else {
                                 echo "⚠️ No Dockerfile found for ${service}, skipping"
@@ -114,6 +127,7 @@ pipeline {
         success {
             echo "✅ ALL MICROSERVICES PROCESSED SUCCESSFULLY"
         }
+
         failure {
             echo "❌ PIPELINE FAILED"
         }
