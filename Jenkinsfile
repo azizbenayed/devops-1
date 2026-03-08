@@ -6,9 +6,8 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "devops-1"
-        IMAGE_TAG  = "1.0"
-        CONTAINER_NAME = "authentication"
+        DOCKERHUB_USERNAME = "azizbenayed"
+        TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
     }
 
     options {
@@ -16,112 +15,107 @@ pipeline {
     }
 
     stages {
-
-        stage('Install Dependencies') {
-            steps {
-                echo '📦 Installing Node.js dependencies'
-                sh 'node -v'
-                sh 'npm install'
-            }
-        }
-
-        stage('SonarQube Analysis') {
+        stage('SonarQube + OWASP') {
             steps {
                 script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('sonarqube') {
-                        sh "${scannerHome}/bin/sonar-scanner"
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
+
+                    for (service in services) {
+
+                        echo "🔍 Running Sonar + OWASP for ${service}"
+
+                        dir(service) {
+
+                            // SONAR
+                            def scannerHome = tool 'sonar-scanner'
+                            withSonarQubeEnv('sonarqube') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner \
+                                    -Dsonar.projectKey=${service} \
+                                    -Dsonar.projectName=${service} \
+                                    -Dsonar.sources=.
+                                """
+                            }
+
+                            // OWASP
+                            def odcHome = tool 'dependency-check'
+                            sh """
+                                ${odcHome}/bin/dependency-check.sh \
+                                --project ${service} \
+                                --scan . \
+                                --format HTML \
+                                --out dependency-check-report
+                            """
+                        }
                     }
                 }
             }
         }
 
-        stage('OWASP Dependency Check') {
+        stage('Docker Build + Push + Trivy') {
             steps {
                 script {
-                    def odcHome = tool 'dependency-check'
 
-                    sh 'mkdir -p dependency-check-report'
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
 
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
-                        sh """
-                        ${odcHome}/bin/dependency-check.sh \
-                        --project devops-1 \
-                        --scan . \
-                        --format HTML \
-                        --out dependency-check-report \
-                        --disableYarnAudit \
-                        --nvdApiKey $NVD_KEY
-                        """
+                    for (service in services) {
+
+                        dir(service) {
+
+                            def IMAGE_NAME = "${DOCKERHUB_USERNAME}/${service}"
+                            def FULL_IMAGE = "${IMAGE_NAME}:${TAG}"
+
+                            if (fileExists('Dockerfile')) {
+
+                                withCredentials([usernamePassword(
+                                    credentialsId: 'dockerhub-cred',
+                                    usernameVariable: 'DOCKER_USER',
+                                    passwordVariable: 'DOCKER_PASS'
+                                )]) {
+
+                                    sh """
+                                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                                        docker build -t ${FULL_IMAGE} .
+                                        docker push ${FULL_IMAGE}
+                                        docker logout
+                                    """
+                                }
+
+                                echo "🔐 Running Trivy for ${FULL_IMAGE}"
+                                sh "trivy image ${FULL_IMAGE}"
+
+                            } else {
+                                echo "⚠️ No Dockerfile found for ${service}, skipping"
+                            }
+                        }
                     }
                 }
             }
         }
-
-        stage('Publish OWASP Report') {
-            steps {
-                publishHTML([
-                    reportDir: 'dependency-check-report',
-                    reportFiles: 'dependency-check-report.html',
-                    reportName: 'OWASP Dependency Check Report',
-                    keepAll: true,
-                    alwaysLinkToLastBuild: true,
-                    allowMissing: true
-                ])
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo '🐳 Building Docker Image'
-                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
-            }
-        }
-
-        stage('Trivy Security Scan') {
-            steps {
-                echo '🔐 Running Trivy Scan'
-
-                sh '''
-                mkdir -p trivy-report
-
-                trivy image \
-                --format template \
-                --template "@/usr/local/share/trivy/templates/html.tpl" \
-                -o trivy-report/trivy-report.html \
-                $IMAGE_NAME:$IMAGE_TAG
-                '''
-            }
-        }
-
-        stage('Publish Trivy Report') {
-            steps {
-                publishHTML([
-                    reportDir: 'trivy-report',
-                    reportFiles: 'trivy-report.html',
-                    reportName: 'Trivy Security Report',
-                    keepAll: true,
-                    alwaysLinkToLastBuild: true,
-                    allowMissing: true
-                ])
-            }
-        }
-
     }
 
     post {
-
-        always {
-            echo '🧹 Cleaning container'
-            sh 'docker rm -f $CONTAINER_NAME || true'
-        }
-
         success {
-            echo '✅ CI PIPELINE SUCCESS'
+            echo "✅ ALL MICROSERVICES PROCESSED SUCCESSFULLY"
         }
-
         failure {
-            echo '❌ CI PIPELINE FAILED'
+            echo "❌ PIPELINE FAILED"
         }
     }
 }
