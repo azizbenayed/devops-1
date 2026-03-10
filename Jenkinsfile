@@ -43,15 +43,16 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    '''
+
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+
                 }
             }
         }
 
         stage('SonarQube Scan') {
             steps {
+
                 script {
 
                     def scannerHome = tool 'sonar-scanner'
@@ -66,12 +67,15 @@ pipeline {
                         """
 
                     }
+
                 }
+
             }
         }
 
         stage('OWASP Dependency Check') {
             steps {
+
                 script {
 
                     def odcHome = tool 'dependency-check'
@@ -85,59 +89,87 @@ pipeline {
                     --data ${ODC_DATA} \
                     --noupdate
                     """
+
                 }
+
             }
         }
 
-        stage('Build + Push + Trivy (Parallel)') {
-            parallel {
+        stage('Docker Build + Push + Trivy') {
 
-                stage('auth') {
-                    steps {
-                        script { buildService("auth") }
-                    }
-                }
+            steps {
 
-                stage('client') {
-                    steps {
-                        script { buildService("client") }
-                    }
-                }
+                script {
 
-                stage('expiration') {
-                    steps {
-                        script { buildService("expiration") }
-                    }
-                }
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
 
-                stage('image') {
-                    steps {
-                        script { buildService("image") }
-                    }
-                }
+                    for (service in services) {
 
-                stage('orders') {
-                    steps {
-                        script { buildService("orders") }
-                    }
-                }
+                        dir(service) {
 
-                stage('payments') {
-                    steps {
-                        script { buildService("payments") }
-                    }
-                }
+                            def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
 
-                stage('tickets') {
-                    steps {
-                        script { buildService("tickets") }
+                            if (fileExists('Dockerfile')) {
+
+                                sh """
+
+                                echo "Building ${IMAGE}"
+
+                                docker build -t ${IMAGE} .
+
+                                docker push ${IMAGE}
+
+                                echo "Running Trivy scan"
+
+                                trivy image \
+                                --scanners vuln \
+                                --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+                                --format template \
+                                --template "@../trivy-template/html.tpl" \
+                                --output ../trivy-reports/trivy-${service}.html \
+                                ${IMAGE}
+
+                                """
+
+                            }
+
+                        }
+
                     }
+
                 }
 
             }
+
+        }
+
+        stage('Publish OWASP Report') {
+
+            steps {
+
+                publishHTML([
+                    reportDir: 'dependency-check-report',
+                    reportFiles: 'dependency-check-report.html',
+                    reportName: 'OWASP Dependency Check Report',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: true
+                ])
+
+            }
+
         }
 
         stage('Publish Trivy Reports') {
+
             steps {
 
                 publishHTML([
@@ -150,6 +182,7 @@ pipeline {
                 ])
 
             }
+
         }
 
         stage('Docker Logout') {
@@ -163,47 +196,13 @@ pipeline {
     post {
 
         success {
-            echo "DevSecOps Pipeline Completed Successfully"
+            echo "Pipeline DevSecOps terminé avec succès"
         }
 
         failure {
-            echo "Pipeline Failed"
+            echo "Pipeline échoué"
         }
 
     }
-}
 
-def buildService(service){
-
-    dir(service){
-
-        def IMAGE = "mohamedaziz599/${service}:${env.TAG}"
-
-        if(fileExists('Dockerfile')){
-
-            sh """
-            echo "Building ${IMAGE}"
-
-            docker build -t ${IMAGE} .
-
-            docker push ${IMAGE}
-
-            echo "Running Trivy scan"
-
-            trivy image \
-            --scanners vuln \
-            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-            --format template \
-            --template "@../trivy-template/html.tpl" \
-            --output ../trivy-reports/trivy-${service}.html \
-            ${IMAGE}
-            """
-
-        } else {
-
-            echo "No Dockerfile found for ${service}"
-
-        }
-
-    }
 }
