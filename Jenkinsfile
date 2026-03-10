@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     tools {
@@ -8,6 +9,7 @@ pipeline {
     environment {
         DOCKERHUB_USERNAME = "azizbenayed"
         TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        ODC_DATA = "/var/lib/jenkins/dependency-check-data"
     }
 
     options {
@@ -16,46 +18,105 @@ pipeline {
 
     stages {
 
-        stage('SonarQube + OWASP') {
+        stage('Checkout') {
             steps {
-                script {
+                checkout scm
+            }
+        }
 
-                    def services = [
-                        "auth",
-                        "client",
-                        "expiration",
-                        "image",
-                        "orders",
-                        "payments",
-                        "tickets"
-                    ]
+        stage('Install Trivy Template') {
+            steps {
+                sh '''
+                mkdir -p trivy-template
+                curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o trivy-template/html.tpl
+                mkdir -p trivy-reports
+                '''
+            }
+        }
 
-                    for (service in services) {
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    '''
+                }
+            }
+        }
 
-                        echo "🔍 Running Sonar + OWASP for ${service}"
+        stage('SonarQube + OWASP') {
+            parallel {
 
-                        dir(service) {
-
-                            // SonarQube
-                            def scannerHome = tool 'sonar-scanner'
-                            withSonarQubeEnv('sonarqube') {
-                                sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=${service} \
-                                -Dsonar.projectName=${service} \
-                                -Dsonar.sources=.
-                                """
+                stage('auth') {
+                    steps {
+                        dir('auth') {
+                            script {
+                                runSecurityScan("auth")
                             }
+                        }
+                    }
+                }
 
-                            // OWASP Dependency Check
-                            def odcHome = tool 'dependency-check'
-                            sh """
-                            ${odcHome}/bin/dependency-check.sh \
-                            --project ${service} \
-                            --scan . \
-                            --format HTML \
-                            --out dependency-check-report
-                            """
+                stage('client') {
+                    steps {
+                        dir('client') {
+                            script {
+                                runSecurityScan("client")
+                            }
+                        }
+                    }
+                }
+
+                stage('expiration') {
+                    steps {
+                        dir('expiration') {
+                            script {
+                                runSecurityScan("expiration")
+                            }
+                        }
+                    }
+                }
+
+                stage('image') {
+                    steps {
+                        dir('image') {
+                            script {
+                                runSecurityScan("image")
+                            }
+                        }
+                    }
+                }
+
+                stage('orders') {
+                    steps {
+                        dir('orders') {
+                            script {
+                                runSecurityScan("orders")
+                            }
+                        }
+                    }
+                }
+
+                stage('payments') {
+                    steps {
+                        dir('payments') {
+                            script {
+                                runSecurityScan("payments")
+                            }
+                        }
+                    }
+                }
+
+                stage('tickets') {
+                    steps {
+                        dir('tickets') {
+                            script {
+                                runSecurityScan("tickets")
+                            }
                         }
                     }
                 }
@@ -80,56 +141,90 @@ pipeline {
 
                         dir(service) {
 
-                            def IMAGE_NAME = "${DOCKERHUB_USERNAME}/${service}"
-                            def FULL_IMAGE = "${IMAGE_NAME}:${TAG}"
+                            def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
 
                             if (fileExists('Dockerfile')) {
 
-                                withCredentials([usernamePassword(
-                                    credentialsId: 'dockerhub-cred',
-                                    usernameVariable: 'DOCKER_USER',
-                                    passwordVariable: 'DOCKER_PASS'
-                                )]) {
-
-                                    sh """
-                                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                                    docker build -t ${FULL_IMAGE} .
-                                    docker push ${FULL_IMAGE}
-                                    docker logout
-                                    """
-                                }
-
-                                echo "🔐 Running Trivy scan for ${FULL_IMAGE}"
-
                                 sh """
-                                mkdir -p ../trivy-reports
+                                echo "Building ${IMAGE}"
+
+                                docker build -t ${IMAGE} .
+                                docker push ${IMAGE}
+
+                                echo "Running Trivy Scan"
 
                                 trivy image \
-                                --scanners vuln \
                                 --severity HIGH,CRITICAL \
                                 --format template \
-                                --template "@/usr/local/share/trivy/templates/html.tpl" \
+                                --template "@../trivy-template/html.tpl" \
                                 -o ../trivy-reports/trivy-${service}.html \
-                                ${FULL_IMAGE}
+                                ${IMAGE}
                                 """
 
                             } else {
-                                echo "⚠️ No Dockerfile found for ${service}, skipping"
+                                echo "No Dockerfile for ${service}"
                             }
                         }
                     }
                 }
             }
         }
+
+        stage('Publish Trivy Reports') {
+            steps {
+                publishHTML([
+                    reportDir: 'trivy-reports',
+                    reportFiles: 'trivy-*.html',
+                    reportName: 'Trivy Security Reports',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: true
+                ])
+            }
+        }
+
+        stage('Docker Logout') {
+            steps {
+                sh 'docker logout'
+            }
+        }
+
     }
 
     post {
+
         success {
-            echo "✅ ALL MICROSERVICES PROCESSED SUCCESSFULLY"
+            echo "Pipeline DevSecOps terminé avec succès"
         }
 
         failure {
-            echo "❌ PIPELINE FAILED"
+            echo "Pipeline échoué"
         }
+
     }
+}
+
+def runSecurityScan(service){
+
+    def scannerHome = tool 'sonar-scanner'
+    def odcHome = tool 'dependency-check'
+
+    withSonarQubeEnv('sonarqube') {
+
+        sh """
+        ${scannerHome}/bin/sonar-scanner \
+        -Dsonar.projectKey=${service} \
+        -Dsonar.projectName=${service} \
+        -Dsonar.sources=.
+        """
+    }
+
+    sh """
+    ${odcHome}/bin/dependency-check.sh \
+    --project ${service} \
+    --scan . \
+    --format HTML \
+    --out dependency-check-report \
+    --data /var/lib/jenkins/dependency-check-data
+    """
 }
