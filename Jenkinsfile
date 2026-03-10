@@ -50,102 +50,90 @@ pipeline {
             }
         }
 
-        stage('SonarQube + OWASP') {
+        stage('SonarQube Scan') {
             steps {
                 script {
 
-                    def services = [
-                        "auth",
-                        "client",
-                        "expiration",
-                        "image",
-                        "orders",
-                        "payments",
-                        "tickets"
-                    ]
+                    def scannerHome = tool 'sonar-scanner'
 
-                    for (service in services) {
+                    withSonarQubeEnv('sonarqube') {
 
-                        echo "Running security scan for ${service}"
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=microservices-devops \
+                        -Dsonar.projectName=microservices-devops \
+                        -Dsonar.sources=.
+                        """
 
-                        dir(service) {
-
-                            // SonarQube
-                            def scannerHome = tool 'sonar-scanner'
-                            withSonarQubeEnv('sonarqube') {
-
-                                sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=${service} \
-                                -Dsonar.projectName=${service} \
-                                -Dsonar.sources=.
-                                """
-                            }
-
-                            // OWASP Dependency Check
-                            def odcHome = tool 'dependency-check'
-
-                            sh """
-                            ${odcHome}/bin/dependency-check.sh \
-                            --project ${service} \
-                            --scan . \
-                            --format HTML \
-                            --out dependency-check-report \
-                            --data ${ODC_DATA}
-                            """
-                        }
                     }
                 }
             }
         }
 
-        stage('Docker Build + Push + Trivy') {
+        stage('OWASP Dependency Check') {
             steps {
                 script {
 
-                    def services = [
-                        "auth",
-                        "client",
-                        "expiration",
-                        "image",
-                        "orders",
-                        "payments",
-                        "tickets"
-                    ]
+                    def odcHome = tool 'dependency-check'
 
-                    for (service in services) {
+                    sh """
+                    ${odcHome}/bin/dependency-check.sh \
+                    --project microservices-devops \
+                    --scan . \
+                    --format HTML \
+                    --out dependency-check-report \
+                    --data ${ODC_DATA} \
+                    --noupdate
+                    """
+                }
+            }
+        }
 
-                        dir(service) {
+        stage('Build + Push + Trivy (Parallel)') {
+            parallel {
 
-                            def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
-
-                            if (fileExists('Dockerfile')) {
-
-                                sh """
-                                echo "Building image ${IMAGE}"
-
-                                docker build -t ${IMAGE} .
-                                docker push ${IMAGE}
-
-                                echo "Running Trivy scan"
-
-                                trivy image \
-                                --scanners vuln \
-                                --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-                                --format template \
-                                --template "@../trivy-template/html.tpl" \
-                                --output ../trivy-reports/trivy-${service}.html \
-                                ${IMAGE}
-                                """
-
-                            } else {
-
-                                echo "No Dockerfile found for ${service}"
-
-                            }
-                        }
+                stage('auth') {
+                    steps {
+                        script { buildService("auth") }
                     }
                 }
+
+                stage('client') {
+                    steps {
+                        script { buildService("client") }
+                    }
+                }
+
+                stage('expiration') {
+                    steps {
+                        script { buildService("expiration") }
+                    }
+                }
+
+                stage('image') {
+                    steps {
+                        script { buildService("image") }
+                    }
+                }
+
+                stage('orders') {
+                    steps {
+                        script { buildService("orders") }
+                    }
+                }
+
+                stage('payments') {
+                    steps {
+                        script { buildService("payments") }
+                    }
+                }
+
+                stage('tickets') {
+                    steps {
+                        script { buildService("tickets") }
+                    }
+                }
+
             }
         }
 
@@ -175,11 +163,46 @@ pipeline {
     post {
 
         success {
-            echo "Pipeline DevSecOps terminé avec succès"
+            echo "DevSecOps Pipeline Completed Successfully"
         }
 
         failure {
-            echo "Pipeline échoué"
+            echo "Pipeline Failed"
+        }
+
+    }
+}
+
+def buildService(service){
+
+    dir(service){
+
+        def IMAGE = "mohamedaziz599/${service}:${env.TAG}"
+
+        if(fileExists('Dockerfile')){
+
+            sh """
+            echo "Building ${IMAGE}"
+
+            docker build -t ${IMAGE} .
+
+            docker push ${IMAGE}
+
+            echo "Running Trivy scan"
+
+            trivy image \
+            --scanners vuln \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --format template \
+            --template "@../trivy-template/html.tpl" \
+            --output ../trivy-reports/trivy-${service}.html \
+            ${IMAGE}
+            """
+
+        } else {
+
+            echo "No Dockerfile found for ${service}"
+
         }
 
     }
