@@ -38,21 +38,20 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-cred',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-cred',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
                     sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-
                 }
             }
         }
 
         stage('SonarQube Scan') {
             steps {
-
                 script {
 
                     def scannerHome = tool 'sonar-scanner'
@@ -69,13 +68,11 @@ pipeline {
                     }
 
                 }
-
             }
         }
 
         stage('OWASP Dependency Check') {
             steps {
-
                 script {
 
                     def odcHome = tool 'dependency-check'
@@ -91,7 +88,6 @@ pipeline {
                     """
 
                 }
-
             }
         }
 
@@ -129,13 +125,17 @@ pipeline {
 
                                 echo "Running Trivy scan"
 
+                                mkdir -p ../trivy-reports
+
                                 trivy image \
                                 --scanners vuln \
                                 --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
                                 --format template \
-                                --template "@../trivy-template/html.tpl" \
+                                --template "@/var/lib/jenkins/html.tpl" \
                                 --output ../trivy-reports/trivy-${service}.html \
                                 ${IMAGE}
+
+                                ls -lh ../trivy-reports
 
                                 """
 
@@ -152,9 +152,7 @@ pipeline {
         }
 
         stage('Publish OWASP Report') {
-
             steps {
-
                 publishHTML([
                     reportDir: 'dependency-check-report',
                     reportFiles: 'dependency-check-report.html',
@@ -163,15 +161,11 @@ pipeline {
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
                 ])
-
             }
-
         }
 
         stage('Publish Trivy Reports') {
-
             steps {
-
                 publishHTML([
                     reportDir: 'trivy-reports',
                     reportFiles: 'trivy-*.html',
@@ -180,9 +174,7 @@ pipeline {
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
                 ])
-
             }
-
         }
 
         stage('Docker Logout') {
