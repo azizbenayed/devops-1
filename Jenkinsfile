@@ -9,6 +9,7 @@ pipeline {
     environment {
         DOCKERHUB_USERNAME = "mohamedaziz599"
         TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        ODC_DATA = "/var/lib/jenkins/dependency-check-data"
     }
 
     options {
@@ -45,6 +46,47 @@ pipeline {
                     )
                 ]) {
                     sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                script {
+
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=microservices-devops \
+                        -Dsonar.projectName=microservices-devops \
+                        -Dsonar.sources=.
+                        """
+
+                    }
+
+                }
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                script {
+
+                    def odcHome = tool 'dependency-check'
+
+                    sh """
+                    ${odcHome}/bin/dependency-check.sh \
+                    --project microservices-devops \
+                    --scan . \
+                    --format HTML \
+                    --out dependency-check-report \
+                    --data ${ODC_DATA} \
+                    --noupdate
+                    """
+
                 }
             }
         }
@@ -109,6 +151,19 @@ pipeline {
 
         }
 
+        stage('Publish OWASP Report') {
+            steps {
+                publishHTML([
+                    reportDir: 'dependency-check-report',
+                    reportFiles: 'dependency-check-report.html',
+                    reportName: 'OWASP Dependency Check Report',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: true
+                ])
+            }
+        }
+
         stage('Publish Trivy Reports') {
             steps {
                 publishHTML([
@@ -133,7 +188,7 @@ pipeline {
     post {
 
         success {
-            echo "Pipeline test Trivy terminé avec succès"
+            echo "Pipeline DevSecOps terminé avec succès"
         }
 
         failure {
