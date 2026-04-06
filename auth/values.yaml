@@ -1,0 +1,15 @@
+replicaCount: 2
+
+image:
+  repository: mohamedaziz599/microservises-devops
+  tag: auth-v93
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 3000
+
+canary:
+  enabled: false
+  weight: 10
+  imageTag: auth-v94
