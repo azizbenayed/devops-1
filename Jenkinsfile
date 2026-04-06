@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     tools {
@@ -6,9 +7,9 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "devops-1"
-        IMAGE_TAG  = "1.0"
-        CONTAINER_NAME = "authentication"
+        DOCKERHUB_USERNAME = "mohamedaziz599"
+        TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        ODC_DATA = "/var/lib/jenkins/dependency-check-data"
     }
 
     options {
@@ -17,48 +18,145 @@ pipeline {
 
     stages {
 
-        stage('Install Dependencies') {
+        stage('Checkout') {
             steps {
-                echo '📦 Installing Node.js dependencies...'
-                sh 'node -v'
-                sh 'npm install'
+                checkout scm
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Prepare Trivy Template') {
             steps {
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('sonarqube') {
-                        sh "${scannerHome}/bin/sonar-scanner"
-                    }
+                sh '''
+                mkdir -p trivy-template
+                mkdir -p trivy-reports
+
+                curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
+                -o trivy-template/html.tpl
+                '''
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-cred',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                 }
             }
         }
 
-        stage('Dependency Check (OWASP)') {
+        stage('SonarQube Scan') {
             steps {
                 script {
+
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=microservices-devops \
+                        -Dsonar.projectName=microservices-devops \
+                        -Dsonar.sources=.
+                        """
+
+                    }
+
+                }
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                script {
+
                     def odcHome = tool 'dependency-check'
 
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
-                        sh """
-                            ${odcHome}/bin/dependency-check.sh \
-                            --project devops-1 \
-                            --scan . \
-                            --format HTML \
-                            --out dependency-check-report \
-                            --disableYarnAudit \
-                            --nvdApiKey $NVD_KEY \
-                            --failOnCVSS 7
-                        """
+                    sh """
+                    ${odcHome}/bin/dependency-check.sh \
+                    --project microservices-devops \
+                    --scan . \
+                    --format HTML \
+                    --out dependency-check-report \
+                    --data ${ODC_DATA} \
+                    --noupdate
+                    """
+
+                }
+            }
+        }
+
+        stage('Docker Build + Push + Trivy') {
+
+            steps {
+
+                script {
+
+                    def services = [
+                        "auth",
+                        "client",
+                        "expiration",
+                        "image",
+                        "orders",
+                        "payments",
+                        "tickets"
+                    ]
+
+                    for (service in services) {
+
+                        dir(service) {
+
+                            def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
+
+                            if (fileExists('Dockerfile')) {
+
+                                sh """
+
+                                echo "Building ${IMAGE}"
+
+                                docker build -t ${IMAGE} .
+
+                                docker push ${IMAGE}
+
+                                echo "Running Trivy scan"
+
+                                mkdir -p ../trivy-reports
+
+                                trivy image \
+                                --scanners vuln \
+                                --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+                                --format template \
+                                --template "@../trivy-template/html.tpl" \
+                                --output ../trivy-reports/trivy-${service}.html \
+                                ${IMAGE}
+
+                                ls -lh ../trivy-reports
+
+                                """
+
+                            }
+
+                        }
+
                     }
+
                 }
 
+            }
+
+        }
+
+        stage('Publish OWASP Report') {
+            steps {
                 publishHTML([
-                    reportName: 'Dependency Check Report',
                     reportDir: 'dependency-check-report',
                     reportFiles: 'dependency-check-report.html',
+                    reportName: 'OWASP Dependency Check Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
@@ -66,82 +164,37 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                echo '🐳 Building Docker image...'
-                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
-            }
-        }
-
-       stage('Trivy Security Scan') {
-    steps {
-        echo '🔐 Scanning Docker image with Trivy...'
-
-        sh '''
-            mkdir -p trivy-report
-
-            # Scan image -> JSON
-            trivy image \
-            --scanners vuln \
-            --format json \
-            -o trivy-report/trivy-report.json \
-            $IMAGE_NAME:$IMAGE_TAG
-
-            # Start HTML file
-            cat > trivy-report/trivy-report.html <<EOF
-<html>
-<head>
-    <title>Trivy Security Report</title>
-    <style>
-        body { font-family: Arial; margin: 30px; background:#f4f4f4; }
-        pre { background:white; padding:20px; border-radius:8px; overflow:auto; }
-    </style>
-</head>
-<body>
-    <h1>🔐 Trivy Security Scan Report</h1>
-    <pre>
-EOF
-
-            # Insert JSON content
-            cat trivy-report/trivy-report.json >> trivy-report/trivy-report.html
-
-            # Close HTML file
-            cat >> trivy-report/trivy-report.html <<EOF
-    </pre>
-</body>
-</html>
-EOF
-        '''
-    }
-}
-
-
-        stage('Publish Trivy Report') {
+        stage('Publish Trivy Reports') {
             steps {
                 publishHTML([
-                    reportName: 'Trivy Security Report',
-                    reportDir: 'trivy-report',
-                    reportFiles: 'trivy-report.html',
+                    reportDir: 'trivy-reports',
+                    reportFiles: 'trivy-*.html',
+                    reportName: 'Trivy Security Reports',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
-                    allowMissing: false
+                    allowMissing: true
                 ])
             }
         }
+
+        stage('Docker Logout') {
+            steps {
+                sh 'docker logout'
+            }
+        }
+
     }
 
     post {
-        always {
-            echo '🧹 Cleaning test container'
-            sh 'docker rm -f $CONTAINER_NAME || true'
-        }
 
         success {
-            echo '✅ CI PIPELINE SUCCESS'
+            echo "Pipeline DevSecOps terminé avec succès"
         }
 
         failure {
-            echo '❌ CI PIPELINE FAILED'
+            echo "Pipeline échoué"
         }
+
     }
+
 }
