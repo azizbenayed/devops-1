@@ -18,6 +18,12 @@ pipeline {
 
     stages {
 
+        stage('Clean Workspace (LIGHT)') {
+            steps {
+                deleteDir() // plus rapide que cleanWs()
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -28,8 +34,7 @@ pipeline {
             steps {
                 sh '''
                 mkdir -p trivy-template trivy-reports
-                curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
-                -o trivy-template/html.tpl
+                [ ! -f trivy-template/html.tpl ] && curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o trivy-template/html.tpl
                 '''
             }
         }
@@ -65,7 +70,7 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency Check (FAST)') {
+        stage('OWASP Dependency Check (FAST + CACHE SAFE)') {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
@@ -79,7 +84,6 @@ pipeline {
                         --out dependency-check-report \
                         --data ${ODC_DATA} \
                         --nvdApiKey \$NVD_API_KEY \
-                        --noupdate \
                         --disableRetireJS
                         """
                     }
@@ -87,7 +91,7 @@ pipeline {
             }
         }
 
-        stage('Docker Build + Push + Trivy') {
+        stage('Docker Build + Push + Trivy (SMART CACHE)') {
             steps {
                 script {
 
@@ -106,12 +110,20 @@ pipeline {
                         dir(service) {
 
                             def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
+                            def IMAGE_LATEST = "${DOCKERHUB_USERNAME}/${service}:latest"
 
                             if (fileExists('Dockerfile')) {
 
                                 sh """
-                                docker build -t ${IMAGE} .
+                                docker pull ${IMAGE_LATEST} || true
+
+                                docker build \
+                                --cache-from=${IMAGE_LATEST} \
+                                -t ${IMAGE} \
+                                -t ${IMAGE_LATEST} .
+
                                 docker push ${IMAGE}
+                                docker push ${IMAGE_LATEST}
 
                                 trivy image \
                                 --scanners vuln \
