@@ -3,9 +3,7 @@ import { app } from "./app";
 import { rabbitWrapper } from "./rabbit-wrapper";
 import { OrderCreatedListener } from "./events/listeners/order-created-listener";
 import { OrderCancelledListener } from "./events/listeners/order-cancelled-listener";
-import dotenv from 'dotenv';
 
-dotenv.config();
 
 
 const start = async () => {
