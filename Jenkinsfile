@@ -3,13 +3,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node20' 
+        nodejs 'node20'
     }
 
     environment {
         DOCKERHUB_USERNAME = "mohamedaziz599"
         TAG = "${env.BUILD_NUMBER}"
         ODC_DATA = "/var/lib/jenkins/dependency-check-data"
+        TRIVY_CACHE = "/tmp/trivy-cache"
     }
 
     options {
@@ -18,9 +19,9 @@ pipeline {
 
     stages {
 
-        stage('Clean Workspace (LIGHT)') {
+        stage('Clean Workspace') {
             steps {
-                deleteDir() // plus rapide que cleanWs()
+                deleteDir()
             }
         }
 
@@ -30,11 +31,24 @@ pipeline {
             }
         }
 
-        stage('Prepare Trivy Template') {
+        stage('Check Tools') {
             steps {
                 sh '''
-                mkdir -p trivy-template trivy-reports
-                [ ! -f trivy-template/html.tpl ] && curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o trivy-template/html.tpl
+                docker --version
+                node --version
+                npm --version
+                trivy --version
+                '''
+            }
+        }
+
+        stage('Prepare Reports') {
+            steps {
+                sh '''
+                mkdir -p trivy-template trivy-reports dependency-check-report
+                if [ ! -f trivy-template/html.tpl ]; then
+                  curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o trivy-template/html.tpl
+                fi
                 '''
             }
         }
@@ -48,7 +62,9 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
                 }
             }
         }
@@ -60,17 +76,17 @@ pipeline {
                     withSonarQubeEnv('sonarqube') {
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
-                        -Dsonar.projectKey=microservices-devops \
-                        -Dsonar.projectName=microservices-devops \
-                        -Dsonar.sources=. \
-                        -Dsonar.exclusions=**/node_modules/**,**/dependency-check-report/**,**/trivy-reports/**
+                          -Dsonar.projectKey=microservices-devops \
+                          -Dsonar.projectName=microservices-devops \
+                          -Dsonar.sources=. \
+                          -Dsonar.exclusions=**/node_modules/**,**/dependency-check-report/**,**/trivy-reports/**
                         """
                     }
                 }
             }
         }
 
-        stage('OWASP Dependency Check (FAST + CACHE SAFE)') {
+        stage('OWASP Dependency Check') {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
@@ -78,23 +94,22 @@ pipeline {
                     withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
                         sh """
                         ${odcHome}/bin/dependency-check.sh \
-                        --project microservices-devops \
-                        --scan auth client orders payments tickets expiration image \
-                        --format HTML \
-                        --out dependency-check-report \
-                        --data ${ODC_DATA} \
-                        --nvdApiKey \$NVD_API_KEY \
-                        --disableRetireJS
+                          --project microservices-devops \
+                          --scan auth client orders payments tickets expiration image \
+                          --format HTML \
+                          --out dependency-check-report \
+                          --data ${ODC_DATA} \
+                          --nvdApiKey \$NVD_API_KEY \
+                          --disableRetireJS
                         """
                     }
                 }
             }
         }
 
-        stage('Docker Build + Push + Trivy (SMART CACHE)') {
+        stage('Docker Build + Push + Trivy') {
             steps {
                 script {
-
                     def services = [
                         "auth",
                         "client",
@@ -106,33 +121,34 @@ pipeline {
                     ]
 
                     for (service in services) {
-
                         dir(service) {
-
                             def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
                             def IMAGE_LATEST = "${DOCKERHUB_USERNAME}/${service}:latest"
 
                             if (fileExists('Dockerfile')) {
-
                                 sh """
                                 docker pull ${IMAGE_LATEST} || true
 
                                 docker build \
-                                --cache-from=${IMAGE_LATEST} \
-                                -t ${IMAGE} \
-                                -t ${IMAGE_LATEST} .
+                                  --cache-from=${IMAGE_LATEST} \
+                                  -t ${IMAGE} \
+                                  -t ${IMAGE_LATEST} .
 
                                 docker push ${IMAGE}
                                 docker push ${IMAGE_LATEST}
 
                                 trivy image \
-                                --scanners vuln \
-                                --severity HIGH,CRITICAL \
-                                --format template \
-                                --template "@../trivy-template/html.tpl" \
-                                --output ../trivy-reports/trivy-${service}.html \
-                                ${IMAGE}
+                                  --scanners vuln \
+                                  --severity HIGH,CRITICAL \
+                                  --exit-code 0 \
+                                  --cache-dir ${TRIVY_CACHE} \
+                                  --format template \
+                                  --template "@../trivy-template/html.tpl" \
+                                  --output ../trivy-reports/trivy-${service}.html \
+                                  ${IMAGE}
                                 """
+                            } else {
+                                echo "No Dockerfile found for ${service}, skipping."
                             }
                         }
                     }
@@ -145,7 +161,7 @@ pipeline {
                 publishHTML([
                     reportDir: 'dependency-check-report',
                     reportFiles: 'dependency-check-report.html',
-                    reportName: 'OWASP Report',
+                    reportName: 'OWASP Dependency Check Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
@@ -161,18 +177,17 @@ pipeline {
                 ])
             }
         }
-
-        stage('Docker Logout') {
-            steps {
-                sh 'docker logout'
-            }
-        }
     }
 
     post {
+        always {
+            sh 'docker logout || true'
+        }
+
         success {
             echo "Pipeline DevSecOps SUCCESS"
         }
+
         failure {
             echo "Pipeline FAILED"
         }
