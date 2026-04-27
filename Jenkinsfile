@@ -11,6 +11,7 @@ pipeline {
         TAG = "${env.BUILD_NUMBER}"
         ODC_DATA = "/var/lib/jenkins/dependency-check-data"
         TRIVY_CACHE = "/tmp/trivy-cache"
+        TRIVY_DB_REPOSITORY = "ghcr.io/aquasecurity/trivy-db"
     }
 
     options {
@@ -47,8 +48,21 @@ pipeline {
                 sh '''
                 mkdir -p trivy-template trivy-reports dependency-check-report
                 if [ ! -f trivy-template/html.tpl ]; then
-                  curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o trivy-template/html.tpl
+                  curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
+                    -o trivy-template/html.tpl
                 fi
+                '''
+            }
+        }
+
+        stage('Update Trivy DB') {
+            steps {
+                sh '''
+                trivy image \
+                  --download-db-only \
+                  --cache-dir ${TRIVY_CACHE} \
+                  --db-repository ${TRIVY_DB_REPOSITORY} \
+                  --timeout 15m
                 '''
             }
         }
@@ -90,7 +104,6 @@ pipeline {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
-
                     withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
                         sh """
                         ${odcHome}/bin/dependency-check.sh \
@@ -100,7 +113,8 @@ pipeline {
                           --out dependency-check-report \
                           --data ${ODC_DATA} \
                           --nvdApiKey \$NVD_API_KEY \
-                          --disableRetireJS
+                          --disableRetireJS \
+                          --disableNodeAudit
                         """
                     }
                 }
@@ -142,9 +156,11 @@ pipeline {
                                   --severity HIGH,CRITICAL \
                                   --exit-code 0 \
                                   --cache-dir ${TRIVY_CACHE} \
+                                  --skip-db-update \
+                                  --timeout 15m \
                                   --format template \
                                   --template "@../trivy-template/html.tpl" \
-                                  --output ../trivy-reports/trivy-${service}.html \
+                                  --output "../trivy-reports/trivy-${service}.html" \
                                   ${IMAGE}
                                 """
                             } else {
@@ -169,7 +185,7 @@ pipeline {
 
                 publishHTML([
                     reportDir: 'trivy-reports',
-                    reportFiles: 'trivy-*.html',
+                    reportFiles: 'trivy-auth.html',
                     reportName: 'Trivy Reports',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
