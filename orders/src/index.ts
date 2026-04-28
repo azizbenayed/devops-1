@@ -5,8 +5,7 @@ import { TicketCreatedListener } from "./events/listeners/ticket-created-listene
 import { TicketUpdatedListener } from "./events/listeners/ticket-updated-listener";
 import { ExpirationCompleteListener } from "./events/listeners/expiration-complete-listener";
 import { PaymentCreatedListener } from "./events/listeners/payment-created-listener"
-import dotenv from "dotenv";
-dotenv.config();
+
 
 const start = async () => {
   if (!process.env.JWT_KEY) {
