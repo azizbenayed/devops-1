@@ -20,9 +20,30 @@ pipeline {
 
     stages {
 
+        // 🧹 Clean workspace
         stage('Clean Workspace') {
             steps {
                 deleteDir()
+            }
+        }
+
+        // 🧹 Clean Docker cache
+        stage('Clean Docker Cache') {
+            steps {
+                sh '''
+                docker system prune -af || true
+                docker builder prune -af || true
+                '''
+            }
+        }
+
+        // 🧹 Clean security tools cache
+        stage('Clean Security Cache') {
+            steps {
+                sh '''
+                rm -rf ${TRIVY_CACHE} || true
+                rm -rf ${ODC_DATA} || true
+                '''
             }
         }
 
@@ -47,6 +68,7 @@ pipeline {
             steps {
                 sh '''
                 mkdir -p trivy-template trivy-reports dependency-check-report
+
                 if [ ! -f trivy-template/html.tpl ]; then
                   curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
                     -o trivy-template/html.tpl
@@ -136,15 +158,17 @@ pipeline {
 
                     for (service in services) {
                         dir(service) {
+
                             def IMAGE = "${DOCKERHUB_USERNAME}/${service}:${TAG}"
                             def IMAGE_LATEST = "${DOCKERHUB_USERNAME}/${service}:latest"
 
                             if (fileExists('Dockerfile')) {
+
                                 sh """
-                                docker pull ${IMAGE_LATEST} || true
+                                echo "Building ${service} WITHOUT CACHE..."
 
                                 docker build \
-                                  --cache-from=${IMAGE_LATEST} \
+                                  --no-cache \
                                   -t ${IMAGE} \
                                   -t ${IMAGE_LATEST} .
 
@@ -156,7 +180,6 @@ pipeline {
                                   --severity HIGH,CRITICAL \
                                   --exit-code 0 \
                                   --cache-dir ${TRIVY_CACHE} \
-                                  --skip-db-update \
                                   --timeout 15m \
                                   --format template \
                                   --template "@../trivy-template/html.tpl" \
