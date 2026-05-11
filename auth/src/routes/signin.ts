@@ -21,6 +21,7 @@ router.post(
     const { email, password } = req.body;
 
     const existingUser = await User.findOne({ email });
+
     if (!existingUser) {
       throw new BadRequestError("Invalid credentials");
     }
@@ -29,34 +30,37 @@ router.post(
       existingUser.password,
       password
     );
+
     if (!passwordsMatch) {
-      throw new BadRequestError("Invalid Credentials");
+      throw new BadRequestError("Invalid credentials");
     }
 
-    // Generate JWT
-    sendTokenResponse(existingUser as any, 200, res);
+    await sendTokenResponse(existingUser as any, 200, res);
   }
 );
 
 interface TokenOptions {
   maxAge: number;
   httpOnly: boolean;
-  secure?: boolean;
+  secure: boolean;
+  sameSite: "lax" | "strict" | "none";
 }
 
 const sendTokenResponse = async (
   user: UserDocMethod,
   codeStatus: number,
-  res: any
+  res: Response
 ) => {
   const token = await user.getJwtToken();
-  const options: TokenOptions = { maxAge: 60 * 60 * 1000, httpOnly: true };
 
-  if (process.env.NODE_ENV === "production") {
-    options.secure = true;
-  }
+  const options: TokenOptions = {
+    maxAge: 60 * 60 * 1000,
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+  };
 
-  res.status(codeStatus).cookie("token", token, options).send({
+  res.status(codeStatus).cookie("session", token, options).send({
     id: user.id,
     email: user.email,
   });
