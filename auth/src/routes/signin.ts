@@ -60,7 +60,7 @@ const sendTokenResponse = async (
     sameSite: "lax",
   };
 
-  res.status(codeStatus).cookie("session", token, options).send({
+  res.status(codeStatus).cookie("token", token, options).send({
     id: user.id,
     email: user.email,
   });
