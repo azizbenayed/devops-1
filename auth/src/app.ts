@@ -10,8 +10,13 @@ import { signoutRouter } from "./routes/signout";
 import { signupRouter } from "./routes/signup";
 
 const app = express();
+
+// Required when running behind ingress/nginx proxy
 app.set("trust proxy", true);
+
 app.use(json());
+
+// Required so req.cookies.session can be read in current-user middleware/routes
 app.use(cookieParser());
 
 app.use(currentUserRouter);
@@ -19,7 +24,7 @@ app.use(signinRouter);
 app.use(signoutRouter);
 app.use(signupRouter);
 
-app.all("*", async (req, res) => {
+app.all("*", async () => {
   throw new NotFoundError();
 });
 
