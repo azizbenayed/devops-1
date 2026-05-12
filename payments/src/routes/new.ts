@@ -22,9 +22,14 @@ router.post(
   [body("orderId").not().isEmpty().withMessage("OrderId is required")],
   validateRequest,
   async (req: Request, res: Response) => {
+    console.log("PAYMENT BODY:", req.body);
+    console.log("CURRENT USER:", req.currentUser);
+
     const { orderId } = req.body;
 
     const order = await Order.findById(orderId);
+
+    console.log("FOUND ORDER:", order);
 
     if (!order) {
       throw new NotFoundError();
@@ -38,6 +43,14 @@ router.post(
       throw new BadRequestError("Cannot pay for a cancelled order");
     }
 
+    const amount = order.ticket.price * 100;
+
+    console.log("CREATE STRIPE CHECKOUT SESSION:", {
+      orderId,
+      amount,
+      ticketPrice: order.ticket.price,
+    });
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -45,17 +58,19 @@ router.post(
           price_data: {
             currency: "usd",
             product_data: {
-              name: order.title || "Ticket",
+              name: "Ticket",
             },
-            unit_amount: order.price * 100,
+            unit_amount: amount,
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url: "http://ticketslokal.com/payment/success",
-      cancel_url: "http://ticketslokal.com/payment/cancel",
+      success_url: "http://nodeapp.local:32560/payment/success",
+      cancel_url: "http://nodeapp.local:32560/payment/cancel",
     });
+
+    console.log("STRIPE SESSION CREATED:", session.id);
 
     const payment = Payment.build({
       orderId,
