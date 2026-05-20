@@ -4,9 +4,14 @@ pipeline {
     stages {
         stage('Test Vault Only') {
             steps {
-                withVault([
+                withVault(
+                    configuration: [
+                        vaultUrl: 'http://localhost:8200',
+                        vaultCredentialId: 'vault-token',
+                        engineVersion: 2
+                    ],
                     vaultSecrets: [[
-                        path: 'secret/data/microservices/auth',
+                        path: 'secret/microservices/auth',
                         engineVersion: 2,
                         secretValues: [
                             [envVar: 'JWT_KEY', vaultKey: 'JWT_KEY'],
@@ -14,7 +19,7 @@ pipeline {
                             [envVar: 'RABBITMQ_URL', vaultKey: 'RABBITMQ_URL']
                         ]
                     ]]
-                ]) {
+                ) {
                     sh '''
                     echo "Vault OK"
                     echo "JWT_KEY loaded"
