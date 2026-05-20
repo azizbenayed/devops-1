@@ -20,14 +20,14 @@ pipeline {
 
     stages {
 
-        // 🧹 Clean workspace
+        // Clean workspace
         stage('Clean Workspace') {
             steps {
                 deleteDir()
             }
         }
 
-        // 🧹 Clean Docker cache
+        // Clean Docker cache
         stage('Clean Docker Cache') {
             steps {
                 sh '''
@@ -37,7 +37,7 @@ pipeline {
             }
         }
 
-        // 🧹 Clean security tools cache
+        // Clean security tools cache
         stage('Clean Security Cache') {
             steps {
                 sh '''
@@ -50,6 +50,29 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Test Vault') {
+            steps {
+                withVault([
+                    vaultSecrets: [[
+                        path: 'secret/data/microservices/auth',
+                        engineVersion: 2,
+                        secretValues: [
+                            [envVar: 'JWT_KEY', vaultKey: 'JWT_KEY'],
+                            [envVar: 'MONGO_URI', vaultKey: 'MONGO_URI'],
+                            [envVar: 'RABBITMQ_URL', vaultKey: 'RABBITMQ_URL']
+                        ]
+                    ]]
+                ]) {
+                    sh '''
+                    echo "Vault OK"
+                    echo "JWT_KEY loaded"
+                    echo "MONGO_URI loaded"
+                    echo "RABBITMQ_URL loaded"
+                    '''
+                }
             }
         }
 
@@ -126,7 +149,9 @@ pipeline {
             steps {
                 script {
                     def odcHome = tool 'dependency-check'
-                    withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                    withCredentials([
+                        string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')
+                    ]) {
                         sh """
                         ${odcHome}/bin/dependency-check.sh \
                           --project microservices-devops \
