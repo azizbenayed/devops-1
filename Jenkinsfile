@@ -38,7 +38,13 @@ pipeline {
         stage('Clean Security Cache') {
             steps {
                 sh '''
-                rm -rf ${TRIVY_CACHE} || true
+                # NOTE: Trivy's vulnerability DB cache is intentionally kept
+                # between builds. Trivy already checks its own DB staleness
+                # (NextUpdate metadata) and only re-downloads when needed, so
+                # wiping ${TRIVY_CACHE} every run forced a full ~112MB
+                # re-download on every build, making the pipeline fragile to
+                # network hiccups (see build failures downloading
+                # ghcr.io/aquasecurity/trivy-db).
                 rm -rf ${ODC_DATA} || true
                 '''
             }
