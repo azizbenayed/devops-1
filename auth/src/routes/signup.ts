@@ -4,6 +4,7 @@ import { validateRequest, BadRequestError } from "@eftickets/common";
 
 import { User } from "../models/user";
 import { UserDocMethod } from "../types/IUser";
+import { isAdminEmail } from "../config/admin-emails";
 
 const router = express.Router();
 
@@ -26,7 +27,8 @@ router.post(
       throw new BadRequestError("Email in use");
     }
 
-    const user = User.build({ email, password });
+    const role = isAdminEmail(email) ? "admin" : "client";
+    const user = User.build({ email, password, role });
     await user.save();
 
     await sendTokenResponse(user as any, 201, res);
@@ -57,6 +59,7 @@ const sendTokenResponse = async (
   res.status(codeStatus).cookie("token", token, options).send({
     id: user.id,
     email: user.email,
+    role: (user as any).role,
   });
 };
 

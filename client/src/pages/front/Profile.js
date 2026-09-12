@@ -5,8 +5,12 @@ import useFetchData from "../../hooks/useFetchData";
 import { Link } from "react-router-dom";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import LocalActivityIcon from "@mui/icons-material/LocalActivity";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import { useAuth } from "../../context/AuthContext";
 
 const Profile = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const { data: currentUserRes, loading: userLoading } = useSingle(
     "/api/users/currentuser"
   );
@@ -60,9 +64,20 @@ const Profile = () => {
                     {currentUser?.email ? currentUser.email[0].toUpperCase() : "?"}
                   </Avatar>
                   <Box>
-                    <Typography variant="h6" sx={{ color: "#fafafa" }}>
-                      {currentUser?.email || "Unknown user"}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="h6" sx={{ color: "#fafafa" }}>
+                        {currentUser?.email || "Unknown user"}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={isAdmin ? "Admin" : "Client"}
+                        sx={{
+                          bgcolor: isAdmin ? "rgb(252 202 80)" : "rgba(255,255,255,0.1)",
+                          color: isAdmin ? "#031d2a" : "#fafafa",
+                          fontWeight: "bold",
+                        }}
+                      />
+                    </Box>
                     <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
                       User ID: {currentUser?.id || "-"}
                     </Typography>
@@ -110,15 +125,27 @@ const Profile = () => {
                   label="View my orders"
                   sx={{ bgcolor: "rgb(252 202 80)", color: "#031d2a", fontWeight: "bold" }}
                 />
-                <Chip
-                  component={Link}
-                  to="/create/ticket"
-                  clickable
-                  icon={<LocalActivityIcon />}
-                  variant="outlined"
-                  label="Sell a ticket"
-                  sx={{ color: "#fafafa", borderColor: "rgba(255,255,255,0.3)" }}
-                />
+                {isAdmin ? (
+                  <Chip
+                    component={Link}
+                    to="/create/ticket"
+                    clickable
+                    icon={<LocalActivityIcon />}
+                    variant="outlined"
+                    label="Sell a ticket"
+                    sx={{ color: "#fafafa", borderColor: "rgba(255,255,255,0.3)" }}
+                  />
+                ) : (
+                  <Chip
+                    component={Link}
+                    to="/"
+                    clickable
+                    icon={<StorefrontIcon />}
+                    variant="outlined"
+                    label="Browse tickets"
+                    sx={{ color: "#fafafa", borderColor: "rgba(255,255,255,0.3)" }}
+                  />
+                )}
               </Box>
             </Box>
           </Box>

@@ -2,8 +2,8 @@ import express, { Request, Response } from "express";
 import { body } from "express-validator";
 import {
   requireAuth,
-  isAuthenticated,
   validateRequest,
+  NotAuthorizedError,
 } from "@eftickets/common";
 import { Ticket } from "../models/ticket";
 import { TicketCreatedPublisher } from "../events/publishers/ticket-created-publisher";
@@ -22,6 +22,12 @@ router.post(
   ],
   validateRequest,
   async (req: Request, res: Response) => {
+    // Only admins are allowed to list tickets for sale. Regular clients
+    // can browse and buy tickets, but cannot create/sell them.
+    if ((req.currentUser as any)?.role !== "admin") {
+      throw new NotAuthorizedError();
+    }
+
     const { title, price } = req.body;
     const ticket = Ticket.build({
       title,

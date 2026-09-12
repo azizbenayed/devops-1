@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
 import { Password } from "../services/password";
-import { UserDoc } from "../types/IUser";
+import { UserDoc, UserRole } from "../types/IUser";
 import jwt from "jsonwebtoken";
 
 // Attributes required to create a new user
 interface UserAttrs {
   email: string;
   password: string;
+  role?: UserRole;
 }
 
 // Properties the User model has
@@ -23,6 +24,11 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
+    },
+    role: {
+      type: String,
+      enum: ["admin", "client"],
+      default: "client",
     },
   },
   {
@@ -49,7 +55,7 @@ userSchema.pre("save", async function (next) {
 // Add custom methods (e.g. generate JWT)
 userSchema.methods.getJwtToken = function () {
   return jwt.sign(
-    { id: this._id.toString(), email: this.email },
+    { id: this._id.toString(), email: this.email, role: this.role },
     process.env.JWT_KEY!,
     { expiresIn: 3600 }
   );
@@ -57,7 +63,7 @@ userSchema.methods.getJwtToken = function () {
 
 // Static method to use type-safe creation
 userSchema.statics.build = (attrs: UserAttrs) => {
-  return new User(attrs);
+  return new User({ role: "client", ...attrs });
 };
 
 const User = mongoose.model<UserDoc, UserModel>("User", userSchema);

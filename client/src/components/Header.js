@@ -19,6 +19,7 @@ import { toast } from "react-toastify";
 
 const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();
+  const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
 
   const [anchorElNav, setAnchorElNav] = React.useState(null);
@@ -49,7 +50,7 @@ const Header = () => {
   const navLinks = isAuthenticated
     ? [
         { name: "My orders", to: "/admin/orders" },
-        { name: "Sell ticket", to: "/create/ticket" },
+        ...(isAdmin ? [{ name: "Sell ticket", to: "/create/ticket" }] : []),
         { name: "Profile", to: "/profile" },
       ]
     : [
@@ -213,14 +214,18 @@ const Header = () => {
                     >
                       My Orders
                     </MenuItem>,
-                    <MenuItem
-                      key="sell"
-                      component={Link}
-                      to="/create/ticket"
-                      onClick={handleCloseUserMenu}
-                    >
-                      Sell a ticket
-                    </MenuItem>,
+                    ...(isAdmin
+                      ? [
+                          <MenuItem
+                            key="sell"
+                            component={Link}
+                            to="/create/ticket"
+                            onClick={handleCloseUserMenu}
+                          >
+                            Sell a ticket
+                          </MenuItem>,
+                        ]
+                      : []),
                     <Divider key="divider" />,
                     <MenuItem
                       key="logout"

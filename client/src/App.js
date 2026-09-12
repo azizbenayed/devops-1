@@ -45,7 +45,7 @@ const App = () => {
           <Route
             path="/create/ticket"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly>
                 <CreateTicket />
               </ProtectedRoute>
             }

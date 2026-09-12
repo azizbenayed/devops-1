@@ -63,6 +63,7 @@ const sendTokenResponse = async (
   res.status(codeStatus).cookie("token", token, options).send({
     id: user.id,
     email: user.email,
+    role: (user as any).role,
   });
 };
 

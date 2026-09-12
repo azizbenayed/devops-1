@@ -3,7 +3,6 @@ import { body } from "express-validator";
 import {
   validateRequest,
   NotFoundError,
-  isAuthenticated,
   requireAuth,
   NotAuthorizedError,
   BadRequestError,
@@ -25,6 +24,11 @@ router.put(
   ],
   validateRequest,
   async (req: Request, res: Response) => {
+    // Only admins can edit tickets for sale.
+    if ((req.currentUser as any)?.role !== "admin") {
+      throw new NotAuthorizedError();
+    }
+
     const ticket = await Ticket.findById(req.params.id);
 
     if (!ticket) {
