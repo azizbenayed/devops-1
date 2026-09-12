@@ -8,12 +8,12 @@ import SignUp from "./pages/front/SignUp";
 import SignIn from "./pages/front/SignIn";
 import Dashboard from "./pages/admin/Dashboard";
 import SingleTicket from "./pages/front/SingleTicket";
-import CreateOrder from "./pages/front/CreateOrder";
 import CreateTicket from "./pages/admin/CreateTicket";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ShowOrder from "./pages/front/ShowOrder";
 import PaymentSuccess from "./pages/front/PaymentSuccess";
 import PaymentCancel from "./pages/front/PaymentCancel";
+import Profile from "./pages/front/Profile";
 
 const App = () => {
   return (
@@ -35,14 +35,6 @@ const App = () => {
             }
           />
           <Route
-            path="/create/order/:orderId"
-            element={
-              <ProtectedRoute>
-                <CreateOrder />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/orders/:orderId"
             element={
               <ProtectedRoute>
@@ -55,6 +47,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <CreateTicket />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />

@@ -11,55 +11,51 @@ import Avatar from "@mui/material/Avatar";
 import Button from "@mui/material/Button";
 import Tooltip from "@mui/material/Tooltip";
 import MenuItem from "@mui/material/MenuItem";
+import Divider from "@mui/material/Divider";
 import BookOnlineIcon from "@mui/icons-material/BookOnline";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
 
-const pages = [
-  { name: "Home", link: "/" },
-  { name: "Sign In", link: "/sign-in" },
-  { name: "Sign Up", link: "/sign-up" },
-  { name: "My orders", link: "/admin/orders" },
-  { name: "Log Out", link: "" },
-];
-
 const Header = () => {
-  const { logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [anchorElNav, setAnchorElNav] = React.useState(null);
   const [anchorElUser, setAnchorElUser] = React.useState(null);
 
-  const handleOpenNavMenu = (event) => {
-    setAnchorElNav(event.currentTarget);
-  };
-  const handleOpenUserMenu = (event) => {
-    setAnchorElUser(event.currentTarget);
-  };
-
-  const handleCloseNavMenu = () => {
-    setAnchorElNav(null);
-  };
-
-  const handleCloseUserMenu = () => {
-    setAnchorElUser(null);
-  };
-
-  const isAuthenticated = localStorage.getItem("user")
-    ? JSON.stringify(localStorage.getItem("user"))
-    : null;
+  const handleOpenNavMenu = (event) => setAnchorElNav(event.currentTarget);
+  const handleOpenUserMenu = (event) => setAnchorElUser(event.currentTarget);
+  const handleCloseNavMenu = () => setAnchorElNav(null);
+  const handleCloseUserMenu = () => setAnchorElUser(null);
 
   const logOutMethod = async () => {
     try {
-      const val = await fetch("/api/users/signout", { method: "Post" });
-      // eslint-disable-next-line
-      const res = await val.json();
-      logout();
-      toast("Log out successfully!");
+      await fetch("/api/users/signout", { method: "POST" });
     } catch (error) {
       console.log(error);
+    } finally {
+      logout();
+      handleCloseNavMenu();
+      handleCloseUserMenu();
+      toast("Log out successfully!");
+      navigate("/");
     }
   };
+
+  // Same set of links drives both the desktop bar and the mobile menu, so
+  // they can never drift apart (this used to be two separate hand-written
+  // lists and the mobile one never actually navigated anywhere).
+  const navLinks = isAuthenticated
+    ? [
+        { name: "My orders", to: "/admin/orders" },
+        { name: "Sell ticket", to: "/create/ticket" },
+        { name: "Profile", to: "/profile" },
+      ]
+    : [
+        { name: "Sign In", to: "/sign-in" },
+        { name: "Sign Up", to: "/sign-up" },
+      ];
 
   return (
     <AppBar position="static" sx={{ bgcolor: "#031d2a" }}>
@@ -69,8 +65,8 @@ const Header = () => {
           <Typography
             variant="h6"
             noWrap
-            component="a"
-            href="/"
+            component={Link}
+            to="/"
             sx={{
               mr: 2,
               display: { xs: "none", md: "flex" },
@@ -87,8 +83,8 @@ const Header = () => {
           <Box sx={{ flexGrow: 1, display: { xs: "flex", md: "none" } }}>
             <IconButton
               size="large"
-              aria-label="account of current user"
-              aria-controls="menu-appbar"
+              aria-label="open navigation menu"
+              aria-controls="menu-appbar-nav"
               aria-haspopup="true"
               onClick={handleOpenNavMenu}
               color="inherit"
@@ -96,36 +92,47 @@ const Header = () => {
               <MenuIcon />
             </IconButton>
             <Menu
-              id="menu-appbar"
+              id="menu-appbar-nav"
               anchorEl={anchorElNav}
-              anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "left",
-              }}
+              anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
               keepMounted
-              transformOrigin={{
-                vertical: "top",
-                horizontal: "left",
-              }}
+              transformOrigin={{ vertical: "top", horizontal: "left" }}
               open={Boolean(anchorElNav)}
               onClose={handleCloseNavMenu}
               sx={{ display: { xs: "block", md: "none" } }}
             >
-              {pages.map((page, i) => (
-                <MenuItem key={i} onClick={handleCloseNavMenu}>
+              <MenuItem
+                component={Link}
+                to="/"
+                onClick={handleCloseNavMenu}
+              >
+                <Typography sx={{ textAlign: "center" }}>Home</Typography>
+              </MenuItem>
+              {navLinks.map((page) => (
+                <MenuItem
+                  key={page.name}
+                  component={Link}
+                  to={page.to}
+                  onClick={handleCloseNavMenu}
+                >
                   <Typography sx={{ textAlign: "center" }}>
                     {page.name}
                   </Typography>
                 </MenuItem>
               ))}
+              {isAuthenticated && (
+                <MenuItem onClick={logOutMethod}>
+                  <Typography sx={{ textAlign: "center" }}>Log Out</Typography>
+                </MenuItem>
+              )}
             </Menu>
           </Box>
           <BookOnlineIcon sx={{ display: { xs: "flex", md: "none" }, mr: 1 }} />
           <Typography
             variant="h5"
             noWrap
-            component="a"
-            href="/"
+            component={Link}
+            to="/"
             sx={{
               mr: 2,
               display: { xs: "flex", md: "none" },
@@ -141,98 +148,108 @@ const Header = () => {
           </Typography>
           <Box sx={{ flexGrow: 1, display: { xs: "none", md: "flex" } }}>
             <Button
-              onClick={handleCloseNavMenu}
+              component={Link}
+              to="/"
               sx={{ my: 2, color: "white", display: "block" }}
             >
-              <Link style={{ color: "white", textDecoration: "none" }} to="/">
-                Home
-              </Link>
+              Home
             </Button>
-            {!isAuthenticated ? (
-              <>
+            {navLinks
+              .filter((l) => l.name !== "Profile")
+              .map((page) => (
                 <Button
-                  onClick={handleCloseNavMenu}
+                  key={page.name}
+                  component={Link}
+                  to={page.to}
                   sx={{ my: 2, color: "white", display: "block" }}
                 >
-                  <Link
-                    style={{ color: "white", textDecoration: "none" }}
-                    to="/sign-in"
-                  >
-                    Sign In
-                  </Link>
+                  {page.name}
                 </Button>
-                <Button
-                  onClick={handleCloseNavMenu}
-                  sx={{ my: 2, color: "white", display: "block" }}
-                >
-                  <Link
-                    style={{ color: "white", textDecoration: "none" }}
-                    to="/sign-up"
-                  >
-                    Sign up
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  onClick={handleCloseNavMenu}
-                  sx={{ my: 2, color: "white", display: "block" }}
-                >
-                  <Link
-                    style={{ color: "white", textDecoration: "none" }}
-                    to="/admin/orders"
-                  >
-                    My orders
-                  </Link>
-                </Button>
-
-                <Button
-                  onClick={() => logOutMethod()}
-                  sx={{
-                    my: 2,
-                    color: "white",
-                    display: "block",
-                    cursor: "pointer",
-                  }}
-                >
-                  Log Out
-                </Button>
-              </>
+              ))}
+            {isAuthenticated && (
+              <Button
+                onClick={logOutMethod}
+                sx={{ my: 2, color: "white", display: "block", cursor: "pointer" }}
+              >
+                Log Out
+              </Button>
             )}
           </Box>
           <Box sx={{ flexGrow: 0 }}>
-            <Tooltip title="Open settings">
+            <Tooltip title={isAuthenticated ? user?.email ?? "Account" : "Account"}>
               <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                <Avatar alt="Remy Sharp" src="/static/images/avatar/2.jpg" />
+                <Avatar sx={{ bgcolor: "rgb(252 202 80)", color: "#031d2a" }}>
+                  {isAuthenticated && user?.email
+                    ? user.email[0].toUpperCase()
+                    : "?"}
+                </Avatar>
               </IconButton>
             </Tooltip>
             <Menu
               sx={{ mt: "45px" }}
-              id="menu-appbar"
+              id="menu-appbar-user"
               anchorEl={anchorElUser}
-              anchorOrigin={{
-                vertical: "top",
-                horizontal: "right",
-              }}
+              anchorOrigin={{ vertical: "top", horizontal: "right" }}
               keepMounted
-              transformOrigin={{
-                vertical: "top",
-                horizontal: "right",
-              }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
               open={Boolean(anchorElUser)}
               onClose={handleCloseUserMenu}
             >
-              <MenuItem onClick={handleCloseUserMenu}>
-                <Link style={{ textDecoration: "none" }} to="/admin/orders">
-                  My Orders
-                </Link>
-              </MenuItem>
-              <MenuItem onClick={handleCloseUserMenu}>
-                <Link style={{ textDecoration: "none" }} to="/create/ticket">
-                  Selling ticket
-                </Link>
-              </MenuItem>
+              {isAuthenticated
+                ? [
+                    <MenuItem
+                      key="profile"
+                      component={Link}
+                      to="/profile"
+                      onClick={handleCloseUserMenu}
+                    >
+                      Profile
+                    </MenuItem>,
+                    <MenuItem
+                      key="orders"
+                      component={Link}
+                      to="/admin/orders"
+                      onClick={handleCloseUserMenu}
+                    >
+                      My Orders
+                    </MenuItem>,
+                    <MenuItem
+                      key="sell"
+                      component={Link}
+                      to="/create/ticket"
+                      onClick={handleCloseUserMenu}
+                    >
+                      Sell a ticket
+                    </MenuItem>,
+                    <Divider key="divider" />,
+                    <MenuItem
+                      key="logout"
+                      onClick={() => {
+                        handleCloseUserMenu();
+                        logOutMethod();
+                      }}
+                    >
+                      Log Out
+                    </MenuItem>,
+                  ]
+                : [
+                    <MenuItem
+                      key="signin"
+                      component={Link}
+                      to="/sign-in"
+                      onClick={handleCloseUserMenu}
+                    >
+                      Sign In
+                    </MenuItem>,
+                    <MenuItem
+                      key="signup"
+                      component={Link}
+                      to="/sign-up"
+                      onClick={handleCloseUserMenu}
+                    >
+                      Sign Up
+                    </MenuItem>,
+                  ]}
             </Menu>
           </Box>
         </Toolbar>
