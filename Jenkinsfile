@@ -35,21 +35,6 @@ pipeline {
             }
         }
 
-        stage('Clean Security Cache') {
-            steps {
-                sh '''
-                # NOTE: Trivy's vulnerability DB cache is intentionally kept
-                # between builds. Trivy already checks its own DB staleness
-                # (NextUpdate metadata) and only re-downloads when needed, so
-                # wiping ${TRIVY_CACHE} every run forced a full ~112MB
-                # re-download on every build, making the pipeline fragile to
-                # network hiccups (see build failures downloading
-                # ghcr.io/aquasecurity/trivy-db).
-                rm -rf ${ODC_DATA} || true
-                '''
-            }
-        }
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -165,13 +150,26 @@ pipeline {
                         ${odcHome}/bin/dependency-check.sh \
                           --project microservices-devops \
                           --scan auth client orders payments tickets expiration image \
+                          --exclude "**/node_modules/**" \
                           --format HTML \
                           --format JSON \
                           --out dependency-check-report \
                           --data ${ODC_DATA} \
                           --nvdApiKey \$NVD_API_KEY \
                           --disableRetireJS \
-                          --disableNodeAudit
+                          --disableNodeAudit \
+                          --disableAssembly \
+                          --disableNuspec \
+                          --disableNugetconf \
+                          --disableCentral \
+                          --disableCmake \
+                          --disableAutoconf \
+                          --disablePyDist \
+                          --disablePyPkg \
+                          --disableRubygems \
+                          --disableComposer \
+                          --disableCocoapodsAnalyzer \
+                          --disableSwiftPackageManagerAnalyzer
                         """
                     }
                 }
@@ -380,18 +378,15 @@ pipeline {
                             tail -c 15000 console-full.log > console-tail.log
 
                             jq -n --arg log "$(cat console-tail.log)" --arg build "${BUILD_NUMBER}" '{
-                              model: "claude-sonnet-5",
-                              max_tokens: 800,
-                              messages: [{role: "user", content: ("Voici la fin des logs du pipeline Jenkins DevSecOps #" + $build + " qui vient d echouer. Identifie la cause probable de l echec (quelle etape, quelle erreur exacte) et propose un correctif concret et concis, en francais:\n\n" + $log)}]
+                              contents: [{parts: [{text: ("Voici la fin des logs du pipeline Jenkins DevSecOps #" + $build + " qui vient d echouer. Identifie la cause probable de l echec (quelle etape, quelle erreur exacte) et propose un correctif concret et concis, en francais:\n\n" + $log)}]}],
+                              generationConfig: {maxOutputTokens: 800}
                             }' > ai-failure-payload.json
 
-                            curl -s https://api.anthropic.com/v1/messages \
-                              -H "x-api-key: $ANTHROPIC_API_KEY" \
-                              -H "anthropic-version: 2023-06-01" \
+                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
                               -H "content-type: application/json" \
                               -d @ai-failure-payload.json > ai-failure-response.json
 
-                            jq -r '.content[0].text // "Pas de diagnostic IA disponible (reponse API invalide)."' ai-failure-response.json > ai-diagnosis.txt
+                            jq -r 'if .candidates then .candidates[0].content.parts[0].text else "Pas de diagnostic IA disponible : " + (.error.message // "reponse API invalide") end' ai-failure-response.json > ai-diagnosis.txt
 
                             echo "===== DIAGNOSTIC IA DE L ECHEC ====="
                             cat ai-diagnosis.txt
