@@ -91,6 +91,7 @@ pipeline {
                 node --version
                 npm --version
                 trivy --version
+                jq --version
                 '''
             }
         }
@@ -165,6 +166,7 @@ pipeline {
                           --project microservices-devops \
                           --scan auth client orders payments tickets expiration image \
                           --format HTML \
+                          --format JSON \
                           --out dependency-check-report \
                           --data ${ODC_DATA} \
                           --nvdApiKey \$NVD_API_KEY \
@@ -218,11 +220,94 @@ pipeline {
                                   --template "@../trivy-template/html.tpl" \
                                   --output "../trivy-reports/trivy-${service}.html" \
                                   ${IMAGE}
+
+                                trivy image \
+                                  --scanners vuln \
+                                  --severity HIGH,CRITICAL \
+                                  --exit-code 0 \
+                                  --cache-dir ${TRIVY_CACHE} \
+                                  --timeout 15m \
+                                  --format json \
+                                  --output "../trivy-reports/trivy-${service}.json" \
+                                  ${IMAGE}
                                 """
                             } else {
                                 echo "No Dockerfile found for ${service}, skipping."
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        stage('AI Security Triage') {
+            steps {
+                script {
+                    try {
+                        withVault(
+                            configuration: [
+                                vaultUrl: 'http://localhost:8200',
+                                vaultCredentialId: 'vault-token',
+                                engineVersion: 2
+                            ],
+                            vaultSecrets: [[
+                                path: 'secret/jenkins/ai',
+                                engineVersion: 2,
+                                secretValues: [
+                                    [envVar: 'GEMINI_API_KEY', vaultKey: 'GEMINI_API_KEY']
+                                ]
+                            ]]
+                        ) {
+                            sh '''
+                            # Pull just the HIGH/CRITICAL findings out of the Trivy + OWASP
+                            # reports so the prompt we send stays small and cheap. This is
+                            # best-effort: if a report is missing/malformed we still produce
+                            # a usable (if empty) findings file rather than failing the build.
+                            ODC_JSON="dependency-check-report/dependency-check-report.json"
+                            FINDINGS="ai-findings.txt"
+                            : > "$FINDINGS"
+
+                            if [ -f "$ODC_JSON" ]; then
+                              jq -r '
+                                [.dependencies[]? | select(.vulnerabilities != null) | .vulnerabilities[]?
+                                  | select(.severity == "HIGH" or .severity == "CRITICAL")
+                                  | "[OWASP][" + .severity + "] " + .name + " - " + ((.description // "")[0:200])
+                                ] | .[0:40][]
+                              ' "$ODC_JSON" >> "$FINDINGS" 2>/dev/null || true
+                            fi
+
+                            for f in trivy-reports/trivy-*.json; do
+                              [ -f "$f" ] || continue
+                              SERVICE=$(basename "$f" .json)
+                              jq -r --arg svc "$SERVICE" '
+                                [.Results[]? | select(.Vulnerabilities != null) | .Vulnerabilities[]?
+                                  | "[Trivy][" + $svc + "][" + .Severity + "] " + .VulnerabilityID + " " + .PkgName + " - " + ((.Title // .Description // "")[0:150])
+                                ] | .[0:20][]
+                              ' "$f" >> "$FINDINGS" 2>/dev/null || true
+                            done
+
+                            if [ ! -s "$FINDINGS" ]; then
+                              echo "Aucune vulnerabilite HIGH/CRITICAL detectee par Trivy ou OWASP Dependency Check sur ce build." > "$FINDINGS"
+                            fi
+
+                            jq -n --arg log "$(cat "$FINDINGS")" '{
+                              contents: [{parts: [{text: ("Voici les vulnerabilites HIGH/CRITICAL detectees par Trivy (images Docker) et OWASP Dependency Check (dependances) sur un projet de microservices Node/Express/React. Fais un resume priorise en francais, concis : regroupe par urgence reelle (pas juste par score CVSS brut), explique en une ligne pourquoi chaque groupe compte pour CE projet, puis liste les 3 a 5 actions les plus importantes a faire en premier.\n\n" + $log)}]}],
+                              generationConfig: {maxOutputTokens: 1200}
+                            }' > ai-security-payload.json
+
+                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+                              -H "content-type: application/json" \
+                              -d @ai-security-payload.json > ai-security-response.json
+
+                            jq -r 'if .candidates then .candidates[0].content.parts[0].text else "Pas de resume IA disponible : " + (.error.message // "reponse API invalide") end' ai-security-response.json > ai-security-summary.md
+
+                            echo "===== RESUME SECURITE IA ====="
+                            cat ai-security-summary.md
+                            '''
+                        }
+                        archiveArtifacts artifacts: 'ai-security-summary.md, ai-findings.txt', allowEmptyArchive: true
+                    } catch (err) {
+                        echo "AI security triage skipped/failed (non-blocking): ${err}"
                     }
                 }
             }
@@ -262,6 +347,62 @@ pipeline {
 
         failure {
             echo "Pipeline FAILED"
+
+            script {
+                try {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'jenkins-api-token',
+                            usernameVariable: 'JENKINS_USER',
+                            passwordVariable: 'JENKINS_TOKEN'
+                        )
+                    ]) {
+                        withVault(
+                            configuration: [
+                                vaultUrl: 'http://localhost:8200',
+                                vaultCredentialId: 'vault-token',
+                                engineVersion: 2
+                            ],
+                            vaultSecrets: [[
+                                path: 'secret/jenkins/ai',
+                                engineVersion: 2,
+                                secretValues: [
+                                    [envVar: 'GEMINI_API_KEY', vaultKey: 'GEMINI_API_KEY']
+                                ]
+                            ]]
+                        ) {
+                            sh '''
+                            # Grab the tail of this build's own console log via the Jenkins
+                            # REST API (works regardless of which stage failed) and ask the
+                            # AI to diagnose the root cause. Best-effort: never fails the
+                            # build further if this step itself has a problem.
+                            curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" "${BUILD_URL}consoleText" -o console-full.log || echo "" > console-full.log
+                            tail -c 15000 console-full.log > console-tail.log
+
+                            jq -n --arg log "$(cat console-tail.log)" --arg build "${BUILD_NUMBER}" '{
+                              model: "claude-sonnet-5",
+                              max_tokens: 800,
+                              messages: [{role: "user", content: ("Voici la fin des logs du pipeline Jenkins DevSecOps #" + $build + " qui vient d echouer. Identifie la cause probable de l echec (quelle etape, quelle erreur exacte) et propose un correctif concret et concis, en francais:\n\n" + $log)}]
+                            }' > ai-failure-payload.json
+
+                            curl -s https://api.anthropic.com/v1/messages \
+                              -H "x-api-key: $ANTHROPIC_API_KEY" \
+                              -H "anthropic-version: 2023-06-01" \
+                              -H "content-type: application/json" \
+                              -d @ai-failure-payload.json > ai-failure-response.json
+
+                            jq -r '.content[0].text // "Pas de diagnostic IA disponible (reponse API invalide)."' ai-failure-response.json > ai-diagnosis.txt
+
+                            echo "===== DIAGNOSTIC IA DE L ECHEC ====="
+                            cat ai-diagnosis.txt
+                            '''
+                        }
+                    }
+                    archiveArtifacts artifacts: 'ai-diagnosis.txt', allowEmptyArchive: true
+                } catch (err) {
+                    echo "AI failure diagnosis skipped/failed (non-blocking): ${err}"
+                }
+            }
         }
     }
 }
