@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "3"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app.kubernetes.io/instance":"nodeapp"},"name":"expiration","namespace":"default"},"spec":{"replicas":2,"selector":{"matchLabels":{"app":"expiration"}},"template":{"metadata":{"labels":{"app":"expiration"}},"spec":{"containers":[{"image":"mohamedaziz599/expiration:113","imagePullPolicy":"Always","name":"expiration","ports":[{"containerPort":3005}]}]}}}}
+  creationTimestamp: "2026-04-08T13:04:40Z"
+  generation: 3
+  labels:
+    app.kubernetes.io/instance: nodeapp
+  name: expiration
+  namespace: default
+  resourceVersion: "135634"
+  uid: d5882cae-4701-44ba-99de-df3a8c68701f
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: expiration
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: expiration
+    spec:
+      containers:
+      - image: mohamedaziz599/expiration:113
+        imagePullPolicy: Always
+        name: expiration
+        ports:
+        - containerPort: 3005
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2026-04-08T13:38:25Z"
+    lastUpdateTime: "2026-04-08T13:41:10Z"
+    message: ReplicaSet "expiration-64d6b765f8" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-04-13T08:47:43Z"
+    lastUpdateTime: "2026-04-13T08:47:43Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 3
+  readyReplicas: 2
+  replicas: 2
+  updatedReplicas: 2
