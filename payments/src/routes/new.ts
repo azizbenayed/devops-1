@@ -43,12 +43,12 @@ router.post(
       throw new BadRequestError("Cannot pay for a cancelled order");
     }
 
-    const amount = order.ticket.price * 100;
+    const amount = order.price * 100;
 
     console.log("CREATE STRIPE CHECKOUT SESSION:", {
       orderId,
       amount,
-      ticketPrice: order.ticket.price,
+      ticketPrice: order.price,
     });
 
     const session = await stripe.checkout.sessions.create({
