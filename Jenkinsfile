@@ -96,13 +96,15 @@ pipeline {
 
         stage('Update Trivy DB') {
             steps {
-                sh '''
-                trivy image \
-                  --download-db-only \
-                  --cache-dir ${TRIVY_CACHE} \
-                  --db-repository ${TRIVY_DB_REPOSITORY} \
-                  --timeout 15m
-                '''
+                retry(3) {
+                    sh '''
+                    trivy image \
+                      --download-db-only \
+                      --cache-dir ${TRIVY_CACHE} \
+                      --db-repository ${TRIVY_DB_REPOSITORY} \
+                      --timeout 15m
+                    '''
+                }
             }
         }
 
@@ -141,36 +143,46 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
-                script {
-                    def odcHome = tool 'dependency-check'
-                    withCredentials([
-                        string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')
-                    ]) {
-                        sh """
-                        ${odcHome}/bin/dependency-check.sh \
-                          --project microservices-devops \
-                          --scan auth client orders payments tickets expiration image \
-                          --exclude "**/node_modules/**" \
-                          --format HTML \
-                          --format JSON \
-                          --out dependency-check-report \
-                          --data ${ODC_DATA} \
-                          --nvdApiKey \$NVD_API_KEY \
-                          --disableRetireJS \
-                          --disableNodeAudit \
-                          --disableAssembly \
-                          --disableNuspec \
-                          --disableNugetconf \
-                          --disableCentral \
-                          --disableCmake \
-                          --disableAutoconf \
-                          --disablePyDist \
-                          --disablePyPkg \
-                          --disableRubygems \
-                          --disableComposer \
-                          --disableCocoapodsAnalyzer \
-                          --disableSwiftPackageManagerAnalyzer
-                        """
+                // This step drives a long (20-30 min) NVD database sync over the
+                // network. If the Jenkins controller hiccups or restarts mid-step
+                // (JENKINS-48300: durable-task log wrapper loses track of the
+                // process), the shell step comes back as exit code -1 and would
+                // otherwise fail the whole pipeline and skip every later stage.
+                // Retry a couple of times before giving up for real.
+                retry(3) {
+                    timeout(time: 45, unit: 'MINUTES') {
+                        script {
+                            def odcHome = tool 'dependency-check'
+                            withCredentials([
+                                string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')
+                            ]) {
+                                sh """
+                                ${odcHome}/bin/dependency-check.sh \
+                                  --project microservices-devops \
+                                  --scan auth client orders payments tickets expiration image \
+                                  --exclude "**/node_modules/**" \
+                                  --format HTML \
+                                  --format JSON \
+                                  --out dependency-check-report \
+                                  --data ${ODC_DATA} \
+                                  --nvdApiKey \$NVD_API_KEY \
+                                  --disableRetireJS \
+                                  --disableNodeAudit \
+                                  --disableAssembly \
+                                  --disableNuspec \
+                                  --disableNugetconf \
+                                  --disableCentral \
+                                  --disableCmake \
+                                  --disableAutoconf \
+                                  --disablePyDist \
+                                  --disablePyPkg \
+                                  --disableRubygems \
+                                  --disableComposer \
+                                  --disableCocoapodsAnalyzer \
+                                  --disableSwiftPackageManagerAnalyzer
+                                """
+                            }
+                        }
                     }
                 }
             }
@@ -293,7 +305,7 @@ pipeline {
                               generationConfig: {maxOutputTokens: 1200}
                             }' > ai-security-payload.json
 
-                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY" \
                               -H "content-type: application/json" \
                               -d @ai-security-payload.json > ai-security-response.json
 
@@ -382,7 +394,7 @@ pipeline {
                               generationConfig: {maxOutputTokens: 800}
                             }' > ai-failure-payload.json
 
-                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+                            curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY" \
                               -H "content-type: application/json" \
                               -d @ai-failure-payload.json > ai-failure-response.json
 
