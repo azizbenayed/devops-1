@@ -4,7 +4,7 @@ FROM node:18-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm install --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 COPY . .
 RUN npm run build
@@ -15,7 +15,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 COPY --from=build /app/dist ./dist
 

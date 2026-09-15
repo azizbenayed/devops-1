@@ -209,17 +209,21 @@ pipeline {
 
                             if (fileExists('Dockerfile')) {
 
+                                retry(2) {
+                                    sh """
+                                    echo "Building ${service} WITHOUT CACHE..."
+
+                                    docker build \
+                                      --no-cache \
+                                      -t ${IMAGE} \
+                                      -t ${IMAGE_LATEST} .
+
+                                    docker push ${IMAGE}
+                                    docker push ${IMAGE_LATEST}
+                                    """
+                                }
+
                                 sh """
-                                echo "Building ${service} WITHOUT CACHE..."
-
-                                docker build \
-                                  --no-cache \
-                                  -t ${IMAGE} \
-                                  -t ${IMAGE_LATEST} .
-
-                                docker push ${IMAGE}
-                                docker push ${IMAGE_LATEST}
-
                                 trivy image \
                                   --scanners vuln \
                                   --severity HIGH,CRITICAL \
