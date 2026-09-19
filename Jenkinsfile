@@ -302,14 +302,17 @@ pipeline {
 
                             jq -n --arg log "$(cat "$FINDINGS")" '{
                               contents: [{parts: [{text: ("Voici les vulnerabilites HIGH/CRITICAL detectees par Trivy (images Docker) et OWASP Dependency Check (dependances) sur un projet de microservices Node/Express/React. Fais un resume priorise en francais, concis : regroupe par urgence reelle (pas juste par score CVSS brut), explique en une ligne pourquoi chaque groupe compte pour CE projet, puis liste les 3 a 5 actions les plus importantes a faire en premier.\n\n" + $log)}]}],
-                              generationConfig: {maxOutputTokens: 1200}
+                              generationConfig: {maxOutputTokens: 3000, thinkingConfig: {thinkingBudget: 0}}
                             }' > ai-security-payload.json
 
                             curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY" \
                               -H "content-type: application/json" \
                               -d @ai-security-payload.json > ai-security-response.json
 
-                            jq -r 'if .candidates then .candidates[0].content.parts[0].text else "Pas de resume IA disponible : " + (.error.message // "reponse API invalide") end' ai-security-response.json > ai-security-summary.md
+                            jq -r 'if .candidates then
+                                .candidates[0].content.parts[0].text
+                                + (if .candidates[0].finishReason == "MAX_TOKENS" then "\n\n[reponse tronquee : limite de tokens atteinte]" else "" end)
+                              else "Pas de resume IA disponible : " + (.error.message // "reponse API invalide") end' ai-security-response.json > ai-security-summary.md
 
                             echo "===== RESUME SECURITE IA ====="
                             cat ai-security-summary.md
@@ -391,14 +394,17 @@ pipeline {
 
                             jq -n --arg log "$(cat console-tail.log)" --arg build "${BUILD_NUMBER}" '{
                               contents: [{parts: [{text: ("Voici la fin des logs du pipeline Jenkins DevSecOps #" + $build + " qui vient d echouer. Identifie la cause probable de l echec (quelle etape, quelle erreur exacte) et propose un correctif concret et concis, en francais:\n\n" + $log)}]}],
-                              generationConfig: {maxOutputTokens: 800}
+                              generationConfig: {maxOutputTokens: 3000, thinkingConfig: {thinkingBudget: 0}}
                             }' > ai-failure-payload.json
 
                             curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY" \
                               -H "content-type: application/json" \
                               -d @ai-failure-payload.json > ai-failure-response.json
 
-                            jq -r 'if .candidates then .candidates[0].content.parts[0].text else "Pas de diagnostic IA disponible : " + (.error.message // "reponse API invalide") end' ai-failure-response.json > ai-diagnosis.txt
+                            jq -r 'if .candidates then
+                                .candidates[0].content.parts[0].text
+                                + (if .candidates[0].finishReason == "MAX_TOKENS" then "\n\n[reponse tronquee : limite de tokens atteinte]" else "" end)
+                              else "Pas de diagnostic IA disponible : " + (.error.message // "reponse API invalide") end' ai-failure-response.json > ai-diagnosis.txt
 
                             echo "===== DIAGNOSTIC IA DE L ECHEC ====="
                             cat ai-diagnosis.txt
