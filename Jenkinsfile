@@ -163,7 +163,6 @@ pipeline {
                                   --data ${ODC_DATA} \
                                   --nvdApiKey \$NVD_API_KEY \
                                   --disableRetireJS \
-                                  --disableNodeAudit \
                                   --disableAssembly \
                                   --disableNuspec \
                                   --disableNugetconf \
