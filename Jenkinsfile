@@ -355,6 +355,38 @@ pipeline {
 
         success {
             echo "Pipeline DevSecOps SUCCESS"
+
+            script {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'gitops-repo-cred',
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                    rm -rf gitops-deploy
+                    git clone "https://${GIT_USER}:${GIT_TOKEN}@github.com/azizbenayed/gitops.git" gitops-deploy
+                    cd gitops-deploy
+
+                    git config user.name "jenkins-ci"
+                    git config user.email "jenkins-ci@local"
+
+                    # Every service in this file shares the same "tag:" key under
+                    # image:, and image tags are the only "tag:" lines in the file,
+                    # so this bumps all of them to the build that just succeeded.
+                    sed -i -E "s/^([[:space:]]*tag:[[:space:]]*).*/\\1${TAG}/" auth/values.yaml
+
+                    if git diff --quiet -- auth/values.yaml; then
+                        echo "auth/values.yaml already at tag ${TAG}, nothing to push."
+                    else
+                        git add auth/values.yaml
+                        git commit -m "ci: bump image tags to build ${TAG}"
+                        git push origin HEAD:master
+                    fi
+                    '''
+                }
+            }
         }
 
         failure {
