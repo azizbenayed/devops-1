@@ -279,8 +279,8 @@ pipeline {
                             if [ -f "$ODC_JSON" ]; then
                               jq -r '
                                 [.dependencies[]? | select(.vulnerabilities != null) | .vulnerabilities[]?
-                                  | select(.severity == "HIGH" or .severity == "CRITICAL")
-                                  | "[OWASP][" + .severity + "] " + .name + " - " + ((.description // "")[0:200])
+                                  | select((.severity // "") | ascii_upcase | IN("HIGH", "CRITICAL"))
+                                  | "[OWASP][" + (.severity | ascii_upcase) + "] " + .name + " - " + ((.description // "")[0:200])
                                 ] | .[0:40][]
                               ' "$ODC_JSON" >> "$FINDINGS" 2>/dev/null || true
                             fi
