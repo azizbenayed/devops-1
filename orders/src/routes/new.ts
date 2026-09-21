@@ -29,6 +29,11 @@ router.post(
   ],
   validateRequest,
   async (req: Request, res: Response) => {
+    // Admins sell tickets, they don't buy them.
+    if ((req.currentUser as any)?.role === "admin") {
+      throw new BadRequestError("Admins cannot buy tickets");
+    }
+
     const { ticketId } = req.body;
 
     // Find the ticket the user is trying to order in the database
@@ -50,6 +55,7 @@ router.post(
     // Build the order and save it to the database
     const order = Order.build({
       userId: req.currentUser!.id,
+      userEmail: (req.currentUser as any).email,
       status: OrderStatus.Created,
       expiresAt: expiration,
       ticket,

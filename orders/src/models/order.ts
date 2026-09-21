@@ -6,6 +6,7 @@ export { OrderStatus };
 
 interface OrderAttrs {
   userId: string;
+  userEmail: string;
   status: OrderStatus;
   expiresAt: Date;
   ticket: TicketDoc;
@@ -13,6 +14,7 @@ interface OrderAttrs {
 
 interface OrderDoc extends mongoose.Document {
   userId: string;
+  userEmail: string;
   status: OrderStatus;
   expiresAt: Date;
   ticket: TicketDoc;
@@ -26,6 +28,13 @@ interface OrderModel extends mongoose.Model<OrderDoc> {
 const orderSchema = new mongoose.Schema(
   {
     userId: {
+      type: String,
+      required: true,
+    },
+    // Snapshot of the buyer's email at purchase time, so the admin orders
+    // list can show who bought what without having to call the auth
+    // service. Comes straight off the JWT, so no extra lookup needed.
+    userEmail: {
       type: String,
       required: true,
     },

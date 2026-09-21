@@ -7,14 +7,18 @@ import { useState } from "react";
 import useSingle from "../../hooks/useSingle";
 import EmptyState from "../../components/EmptyState";
 import { toast } from "react-toastify";
+import { useAuth } from "../../context/AuthContext";
 
 const SingleTicket = () => {
   const { id } = useParams();
   const { data, loading, error } = useSingle(`/api/tickets/${id}`);
   const navigate = useNavigate();
   const [buying, setBuying] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const createOrder = async () => {
+    if (isAdmin) return; // admins sell tickets, they don't buy them
     if (buying) return; // guard against double-clicks
     setBuying(true);
     try {
@@ -102,17 +106,24 @@ const SingleTicket = () => {
                   }}
                 />
                 <Box>
-                  <Button
-                    onClick={createOrder}
-                    disabled={buying}
-                    sx={{
-                      bgcolor: "green",
-                      color: "white",
-                      "&.Mui-disabled": { bgcolor: "rgba(0,128,0,0.5)", color: "white" },
-                    }}
-                  >
-                    {buying ? "Processing..." : "Buy"}
-                  </Button>
+                  {isAdmin ? (
+                    <Chip
+                      label="Admins can't buy tickets"
+                      sx={{ bgcolor: "rgba(255,255,255,0.1)", color: "#fafafa" }}
+                    />
+                  ) : (
+                    <Button
+                      onClick={createOrder}
+                      disabled={buying}
+                      sx={{
+                        bgcolor: "green",
+                        color: "white",
+                        "&.Mui-disabled": { bgcolor: "rgba(0,128,0,0.5)", color: "white" },
+                      }}
+                    >
+                      {buying ? "Processing..." : "Buy"}
+                    </Button>
+                  )}
                 </Box>
               </Box>
             )}

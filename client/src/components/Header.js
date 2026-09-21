@@ -49,7 +49,7 @@ const Header = () => {
   // lists and the mobile one never actually navigated anywhere).
   const navLinks = isAuthenticated
     ? [
-        { name: "My orders", to: "/admin/orders" },
+        { name: isAdmin ? "All orders" : "My orders", to: "/admin/orders" },
         ...(isAdmin ? [{ name: "Sell ticket", to: "/create/ticket" }] : []),
         { name: "Profile", to: "/profile" },
       ]
@@ -212,7 +212,7 @@ const Header = () => {
                       to="/admin/orders"
                       onClick={handleCloseUserMenu}
                     >
-                      My Orders
+                      {isAdmin ? "All Orders" : "My Orders"}
                     </MenuItem>,
                     ...(isAdmin
                       ? [

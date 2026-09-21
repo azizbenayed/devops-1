@@ -90,7 +90,7 @@ const Profile = () => {
               <Box sx={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 <Box>
                   <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
-                    Total orders
+                    {isAdmin ? "Total orders (all clients)" : "Total orders"}
                   </Typography>
                   {ordersLoading ? (
                     <Skeleton variant="text" width={40} sx={{ bgcolor: "rgba(255,255,255,0.1)" }} />
@@ -102,7 +102,7 @@ const Profile = () => {
                 </Box>
                 <Box>
                   <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
-                    Completed purchases
+                    {isAdmin ? "Completed payments" : "Completed purchases"}
                   </Typography>
                   {ordersLoading ? (
                     <Skeleton variant="text" width={40} sx={{ bgcolor: "rgba(255,255,255,0.1)" }} />
@@ -122,7 +122,7 @@ const Profile = () => {
                   to="/admin/orders"
                   clickable
                   icon={<ReceiptLongIcon />}
-                  label="View my orders"
+                  label={isAdmin ? "View all orders" : "View my orders"}
                   sx={{ bgcolor: "rgb(252 202 80)", color: "#031d2a", fontWeight: "bold" }}
                 />
                 {isAdmin ? (
