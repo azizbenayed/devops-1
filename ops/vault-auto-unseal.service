@@ -1,0 +1,16 @@
+[Unit]
+Description=Auto-unseal Vault (vault-0) after reboot
+After=k3s.service network-online.target
+Wants=k3s.service network-online.target
+
+[Service]
+Type=oneshot
+User=dev
+Group=dev
+Environment=HOME=/home/dev
+Environment=KUBECONFIG=/home/dev/.kube/config
+ExecStart=/usr/local/bin/vault-auto-unseal.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
