@@ -113,8 +113,24 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
+                    // `docker login` itself is avoided here: as soon as any
+                    // docker-credential-* helper (secretservice, pass, ...)
+                    // is installed on the host's PATH, Docker CLI silently
+                    // adopts it as the default credential store on the next
+                    // successful login and tries to reach it - which fails
+                    // for this headless service user with "Cannot autolaunch
+                    // D-Bus without X11 $DISPLAY". Writing config.json's
+                    // auths entry directly (the pre-credential-helpers
+                    // format, still fully supported for reads) sidesteps
+                    // that entirely and keeps this stage host-agnostic.
                     sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    set +x
+                    mkdir -p "$HOME/.docker"
+                    AUTH=$(printf '%s' "$DOCKER_USER:$DOCKER_PASS" | base64 -w0)
+                    cat > "$HOME/.docker/config.json" <<CONFIGEOF
+{"auths":{"https://index.docker.io/v1/":{"auth":"$AUTH"}}}
+CONFIGEOF
+                    chmod 600 "$HOME/.docker/config.json"
                     '''
                 }
             }
