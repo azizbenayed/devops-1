@@ -19,15 +19,17 @@ export class OrderCancelledListener extends Consumer<OrderCancelledEvent> {
       throw new Error("Ticket not found");
     }
 
-    ticket.set({ orderId: undefined });
+    // Release one unit of stock back into the pool (order cancelled or
+    // its reservation window expired without payment).
+    ticket.set({ reservedCount: Math.max(0, ticket.reservedCount - 1) });
     await ticket.save();
     await new TicketUpdatedPublisher(this.channel).publish({
       id: ticket.id,
-      orderId: ticket.orderId,
       userId: ticket.userId,
       price: ticket.price,
       title: ticket.title,
       version: ticket.version,
-    });
+      quantity: ticket.quantity,
+    } as any);
   }
 }

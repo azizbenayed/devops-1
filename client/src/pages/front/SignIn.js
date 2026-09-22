@@ -77,8 +77,9 @@ const SignIn = () => {
       setUser({ email: "", password: "" });
       toast("Sign In successfully!");
 
+      // Admins land in the separate admin area, not the storefront.
       setTimeout(() => {
-        navigate("/");
+        navigate(res?.role === "admin" ? "/admin" : "/");
       }, 800);
     } catch (error) {
       console.log("Error", error);

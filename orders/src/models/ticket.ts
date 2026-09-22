@@ -6,13 +6,15 @@ interface TicketAttrs {
   id: string;
   title: string;
   price: number;
+  quantity?: number;
 }
 
 export interface TicketDoc extends mongoose.Document {
   title: string;
   price: number;
+  quantity: number;
   version: number;
-  isReserved(): Promise<boolean>;
+  hasAvailability(): Promise<boolean>;
 }
 
 interface TicketModel extends mongoose.Model<TicketDoc> {
@@ -33,6 +35,15 @@ const ticketSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+    // How many units of this ticket can be sold in total. Defaults to 1
+    // so tickets synced from before this field existed keep behaving like
+    // the old single-buyer model.
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 1,
     },
   },
     {
@@ -59,11 +70,16 @@ ticketSchema.statics.build = (attrs: TicketAttrs) => {
     _id: attrs.id,
     title: attrs.title,
     price: attrs.price,
+    quantity: attrs.quantity,
   });
 };
-ticketSchema.methods.isReserved = async function () {
-  // this === the ticket document that we just called 'isReserved' on
-  const existingOrder = await Order.findOne({
+ticketSchema.methods.hasAvailability = async function () {
+  // this === the ticket document that we just called 'hasAvailability' on.
+  // Count every order that's still holding a unit (reserved, awaiting
+  // payment, or already paid) and compare against how many units this
+  // ticket has - lets several different clients each buy their own unit
+  // instead of the first buyer locking out everyone else.
+  const activeOrdersCount = await Order.countDocuments({
     ticket: this,
     status: {
       $in: [
@@ -74,7 +90,7 @@ ticketSchema.methods.isReserved = async function () {
     },
   });
 
-  return !!existingOrder;
+  return activeOrdersCount < this.quantity;
 };
 
 const Ticket = mongoose.model<TicketDoc, TicketModel>('Ticket', ticketSchema);

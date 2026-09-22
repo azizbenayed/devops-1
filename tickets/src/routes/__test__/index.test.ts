@@ -1,5 +1,6 @@
 import request from "supertest";
 import { app } from "../../app";
+import { Ticket } from "../../models/ticket";
 
 const createTicket = () => {
   return request(app).post("/api/tickets").set("Cookie", global.signin()).send({
@@ -16,4 +17,21 @@ it("can fetch a list of tickets", async () => {
   const response = await request(app).get("/api/tickets").send().expect(200);
 
   expect(response.body.length).toEqual(3);
+});
+
+it("hides a ticket once every unit is reserved, but keeps a partially reserved one visible", async () => {
+  const { body: soldOut } = await createTicket(); // quantity 1
+  const { body: multiUnit } = await request(app)
+    .post("/api/tickets")
+    .set("Cookie", global.signin())
+    .send({ title: "multi", price: 20, quantity: 2 });
+
+  await Ticket.findByIdAndUpdate(soldOut.id, { reservedCount: 1 }); // fully booked
+  await Ticket.findByIdAndUpdate(multiUnit.id, { reservedCount: 1 }); // 1 of 2 left
+
+  const response = await request(app).get("/api/tickets").send().expect(200);
+
+  const ids = response.body.map((t: any) => t.id);
+  expect(ids).not.toContain(soldOut.id);
+  expect(ids).toContain(multiUnit.id);
 });

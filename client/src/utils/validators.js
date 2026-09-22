@@ -14,3 +14,10 @@ export const isValidPrice = (value) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0;
 };
+
+// Mirrors the tickets service's quantity rule: a whole number of at
+// least 1 (how many units of a ticket can be sold).
+export const isValidQuantity = (value) => {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1;
+};

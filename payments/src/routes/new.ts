@@ -51,6 +51,10 @@ router.post(
       ticketPrice: order.price,
     });
 
+    // Configurable so this isn't stuck pointing at one environment, but
+    // falls back to the current known-good URL if unset.
+    const clientUrl = process.env.CLIENT_URL || "http://nodeapp.local:32560";
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -66,8 +70,10 @@ router.post(
         },
       ],
       mode: "payment",
-      success_url: "http://nodeapp.local:32560/payment/success",
-      cancel_url: "http://nodeapp.local:32560/payment/cancel",
+      // Carry the orderId through so the success/cancel pages can show
+      // the client which order this was for instead of a blank screen.
+      success_url: `${clientUrl}/payment/success?orderId=${orderId}`,
+      cancel_url: `${clientUrl}/payment/cancel?orderId=${orderId}`,
     });
 
     console.log("STRIPE SESSION CREATED:", session.id);

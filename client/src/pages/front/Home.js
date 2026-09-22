@@ -7,12 +7,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Navigate } from "react-router-dom";
 import SearchIcon from "@mui/icons-material/Search";
 import TicketCard from "../../components/TicketCard";
 import TicketCardSkeleton from "../../components/TicketCardSkeleton";
 import EmptyState from "../../components/EmptyState";
 import Layout from "./Layout";
 import useFetchData from "../../hooks/useFetchData";
+import { useAuth } from "../../context/AuthContext";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest first" },
@@ -30,6 +32,7 @@ const fieldSx = {
 };
 
 const Home = () => {
+  const { user } = useAuth();
   const { data, loading } = useFetchData("/api/tickets");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -60,6 +63,14 @@ const Home = () => {
 
     return list;
   }, [data, search, sortBy]);
+
+  // Admins live in the separate admin area - they never buy tickets, so
+  // there's nothing for them to do on the public storefront home. This
+  // has to come after every hook above (Rules of Hooks: hooks must run
+  // unconditionally on every render).
+  if (user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
 
   return (
     <Layout>

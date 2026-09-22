@@ -9,6 +9,8 @@ import LocalActivityIcon from "@mui/icons-material/LocalActivity";
 import { Link } from "react-router-dom";
 
 export default function TicketCard({ ticket }) {
+  const remaining = ticket.remaining ?? ticket.quantity ?? 1;
+
   return (
     <Card
       sx={{
@@ -43,15 +45,23 @@ export default function TicketCard({ ticket }) {
               </Typography>
             </Box>
           </Box>
-          <Chip
-            label={`$${ticket.price}`}
-            sx={{
-              mt: 2,
-              fontWeight: "bold",
-              bgcolor: "rgb(252 202 80)",
-              color: "#031d2a",
-            }}
-          />
+          <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
+            <Chip
+              label={`$${ticket.price}`}
+              sx={{
+                fontWeight: "bold",
+                bgcolor: "rgb(252 202 80)",
+                color: "#031d2a",
+              }}
+            />
+            {remaining > 1 && (
+              <Chip
+                size="small"
+                label={`${remaining} left`}
+                sx={{ bgcolor: "rgba(255,255,255,0.1)", color: "#fafafa" }}
+              />
+            )}
+          </Box>
         </CardContent>
       </CardActionArea>
     </Card>

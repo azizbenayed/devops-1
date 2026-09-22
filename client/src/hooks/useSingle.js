@@ -9,6 +9,8 @@ const useSingle = (url) => {
   const [shouldRefetch, refetch] = useState({});
 
   useEffect(() => {
+    if (!url) return;
+
     const fetchdata = async () => {
       try {
         setLoading(true);

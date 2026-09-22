@@ -40,12 +40,16 @@ afterAll(async () => {
 });
 
 global.signin = () => {
-  // Build a JWT payload.  { id, email }
+  // Build a JWT payload. Defaults to admin because every existing test in
+  // this service that hits POST/PUT /api/tickets already expects
+  // global.signin() to be allowed to create/edit tickets (that route is
+  // admin-only) - non-admin behavior is exercised separately where it
+  // matters (e.g. the orders service's "admin can't buy" tests).
   const payload = {
     id: new mongoose.Types.ObjectId().toHexString(),
     email: "test@test.com",
+    role: "admin",
   };
-  // Build a JWT payload.  { id, email }
   process.env.JWT_KEY = "asdfasdf";
 
   // Create the JWT!

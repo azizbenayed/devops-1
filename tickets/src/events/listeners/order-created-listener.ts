@@ -17,8 +17,11 @@ export class OrderCreatedListener extends Consumer<OrderCreatedEvent> {
       throw new Error("Ticket not found");
     }
 
-    // Mark the ticket as being reserved by setting its orderId property
-    ticket.set({ orderId: data.id });
+    // Claim one unit of stock for this order. The orders service already
+    // checked there was room before creating the order, so this just
+    // records it here too (e.g. so the storefront listing hides the
+    // ticket once every unit is spoken for).
+    ticket.set({ reservedCount: ticket.reservedCount + 1 });
 
     // Save the ticket
     await ticket.save();
@@ -27,8 +30,8 @@ export class OrderCreatedListener extends Consumer<OrderCreatedEvent> {
       price: ticket.price,
       title: ticket.title,
       userId: ticket.userId,
-      orderId: ticket.orderId,
       version: ticket.version,
-    });
+      quantity: ticket.quantity,
+    } as any);
   }
 }

@@ -11,6 +11,7 @@ import SingleTicket from "./pages/front/SingleTicket";
 import CreateTicket from "./pages/admin/CreateTicket";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ShowOrder from "./pages/front/ShowOrder";
+import MyOrders from "./pages/front/MyOrders";
 import PaymentSuccess from "./pages/front/PaymentSuccess";
 import PaymentCancel from "./pages/front/PaymentCancel";
 import Profile from "./pages/front/Profile";
@@ -27,10 +28,10 @@ const App = () => {
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/ticket/:id" element={<SingleTicket />} />
           <Route
-            path="/admin/orders"
+            path="/orders"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <MyOrders />
               </ProtectedRoute>
             }
           />
@@ -43,7 +44,15 @@ const App = () => {
             }
           />
           <Route
-            path="/create/ticket"
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/sell"
             element={
               <ProtectedRoute adminOnly>
                 <CreateTicket />

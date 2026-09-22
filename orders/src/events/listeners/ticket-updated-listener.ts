@@ -15,7 +15,9 @@ export class TicketUpdatedListener extends Consumer<TicketUpdatedEvent> {
     }
 
     const { title, price } = data;
-    ticket.set({ title, price });
+    // See ticket-created-listener.ts for why `quantity` is read this way.
+    const quantity = (data as any).quantity;
+    ticket.set({ title, price, ...(quantity ? { quantity } : {}) });
     await ticket.save();
   }
 }

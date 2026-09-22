@@ -1,5 +1,6 @@
 import { Avatar, Box, Chip, Container, Divider, Skeleton, Typography } from "@mui/material";
 import Layout from "./Layout";
+import AdminLayout from "../admin/AdminLayout";
 import useSingle from "../../hooks/useSingle";
 import useFetchData from "../../hooks/useFetchData";
 import { Link } from "react-router-dom";
@@ -22,8 +23,13 @@ const Profile = () => {
     ? orders.filter((o) => o.status === "complete").length
     : 0;
 
+  // Profile is shared by both roles, but each gets its own shell - the
+  // admin back office (AdminLayout) or the client storefront (Layout) -
+  // so this page never has to pick between two different headers itself.
+  const PageShell = isAdmin ? AdminLayout : Layout;
+
   return (
-    <Layout>
+    <PageShell>
       <Box
         sx={{
           bgcolor: "oklch(0.27642 0.055827 233.809)",
@@ -119,7 +125,7 @@ const Profile = () => {
               <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
                 <Chip
                   component={Link}
-                  to="/admin/orders"
+                  to={isAdmin ? "/admin" : "/orders"}
                   clickable
                   icon={<ReceiptLongIcon />}
                   label={isAdmin ? "View all orders" : "View my orders"}
@@ -128,7 +134,7 @@ const Profile = () => {
                 {isAdmin ? (
                   <Chip
                     component={Link}
-                    to="/create/ticket"
+                    to="/admin/sell"
                     clickable
                     icon={<LocalActivityIcon />}
                     variant="outlined"
@@ -151,7 +157,7 @@ const Profile = () => {
           </Box>
         </Container>
       </Box>
-    </Layout>
+    </PageShell>
   );
 };
 

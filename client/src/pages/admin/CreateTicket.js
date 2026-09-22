@@ -1,9 +1,9 @@
 import { Box, Button, CircularProgress, TextField, Typography } from "@mui/material";
-import Layout from "../front/Layout";
+import AdminLayout from "./AdminLayout";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { isValidPrice } from "../../utils/validators";
+import { isValidPrice, isValidQuantity } from "../../utils/validators";
 
 const fieldSx = {
   mb: 3,
@@ -15,7 +15,7 @@ const fieldSx = {
 
 const CreateTicket = () => {
   const navigate = useNavigate();
-  const [ticket, setTicket] = useState({ title: "", price: "" });
+  const [ticket, setTicket] = useState({ title: "", price: "", quantity: "1" });
   const [touched, setTouched] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -26,8 +26,13 @@ const CreateTicket = () => {
       : !isValidPrice(ticket.price)
       ? "Price must be a number greater than 0"
       : "",
+    quantity: !ticket.quantity
+      ? "A quantity is required"
+      : !isValidQuantity(ticket.quantity)
+      ? "Quantity must be a whole number of at least 1"
+      : "",
   };
-  const hasErrors = Boolean(errors.title || errors.price);
+  const hasErrors = Boolean(errors.title || errors.price || errors.quantity);
 
   const handleChange = (e) => {
     setTicket((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -39,7 +44,7 @@ const CreateTicket = () => {
 
   const handleTicket = async (e) => {
     e.preventDefault();
-    setTouched({ title: true, price: true });
+    setTouched({ title: true, price: true, quantity: true });
     if (hasErrors || submitting) return;
 
     setSubmitting(true);
@@ -59,10 +64,10 @@ const CreateTicket = () => {
         return;
       }
 
-      setTicket({ title: "", price: "" });
+      setTicket({ title: "", price: "", quantity: "1" });
       setTouched({});
       toast("Ticket created successfully!");
-      setTimeout(() => navigate("/"), 800);
+      setTimeout(() => navigate("/admin"), 800);
     } catch (error) {
       console.log("Error", error);
       toast.error("Something went wrong, please try again.");
@@ -71,7 +76,7 @@ const CreateTicket = () => {
   };
 
   return (
-    <Layout>
+    <AdminLayout>
       <Box
         sx={{
           bgcolor: "oklch(0.27642 0.055827 233.809)",
@@ -131,6 +136,28 @@ const CreateTicket = () => {
               helperText={touched.price ? errors.price : ""}
               FormHelperTextProps={{ sx: { color: "#ff8a80", ml: 0 } }}
             />
+            <TextField
+              sx={fieldSx}
+              fullWidth
+              id="quantity"
+              name="quantity"
+              placeholder="How many can be sold"
+              required
+              type="number"
+              inputProps={{ min: 1, step: "1" }}
+              value={ticket.quantity}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={touched.quantity && Boolean(errors.quantity)}
+              helperText={
+                touched.quantity
+                  ? errors.quantity
+                  : "How many people can buy this ticket (default 1)"
+              }
+              FormHelperTextProps={{
+                sx: { color: touched.quantity && errors.quantity ? "#ff8a80" : "rgba(255,255,255,0.5)", ml: 0 },
+              }}
+            />
 
             <Button
               type="submit"
@@ -159,7 +186,7 @@ const CreateTicket = () => {
           </Box>
         </Box>
       </Box>
-    </Layout>
+    </AdminLayout>
   );
 };
 

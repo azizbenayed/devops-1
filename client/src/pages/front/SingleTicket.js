@@ -16,9 +16,12 @@ const SingleTicket = () => {
   const [buying, setBuying] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const remaining = data?.remaining ?? data?.quantity ?? 1;
+  const soldOut = remaining <= 0;
 
   const createOrder = async () => {
     if (isAdmin) return; // admins sell tickets, they don't buy them
+    if (soldOut) return;
     if (buying) return; // guard against double-clicks
     setBuying(true);
     try {
@@ -95,20 +98,32 @@ const SingleTicket = () => {
                 <Typography variant="h5" component="div" sx={{ color: "#fafafa" }}>
                   {data.title}
                 </Typography>
-                <Chip
-                  label={`$${data.price}`}
-                  sx={{
-                    mt: 1,
-                    mb: 2,
-                    fontWeight: "bold",
-                    bgcolor: "rgb(252 202 80)",
-                    color: "#031d2a",
-                  }}
-                />
+                <Box sx={{ display: "flex", gap: 1, mt: 1, mb: 2, flexWrap: "wrap" }}>
+                  <Chip
+                    label={`$${data.price}`}
+                    sx={{
+                      fontWeight: "bold",
+                      bgcolor: "rgb(252 202 80)",
+                      color: "#031d2a",
+                    }}
+                  />
+                  <Chip
+                    label={soldOut ? "Sold out" : `${remaining} left`}
+                    sx={{
+                      bgcolor: soldOut ? "rgba(255,99,99,0.15)" : "rgba(255,255,255,0.1)",
+                      color: soldOut ? "rgb(255 138 128)" : "#fafafa",
+                    }}
+                  />
+                </Box>
                 <Box>
                   {isAdmin ? (
                     <Chip
                       label="Admins can't buy tickets"
+                      sx={{ bgcolor: "rgba(255,255,255,0.1)", color: "#fafafa" }}
+                    />
+                  ) : soldOut ? (
+                    <Chip
+                      label="Sold out"
                       sx={{ bgcolor: "rgba(255,255,255,0.1)", color: "#fafafa" }}
                     />
                   ) : (

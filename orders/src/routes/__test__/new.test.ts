@@ -53,6 +53,37 @@ it("reserves a ticket", async () => {
     .expect(201);
 });
 
+it("lets several different clients each buy a unit of a multi-quantity ticket", async () => {
+  const ticket = Ticket.build({
+    id: new mongoose.Types.ObjectId().toHexString(),
+    title: "concert",
+    price: 20,
+    quantity: 2,
+  });
+  await ticket.save();
+
+  await request(app)
+    .post("/api/orders")
+    .set("Cookie", global.signin())
+    .send({ ticketId: ticket.id })
+    .expect(201);
+
+  // A different client buying the same ticket should still succeed,
+  // since there's a second unit available.
+  await request(app)
+    .post("/api/orders")
+    .set("Cookie", global.signin())
+    .send({ ticketId: ticket.id })
+    .expect(201);
+
+  // A third client is out of luck - both units are now taken.
+  await request(app)
+    .post("/api/orders")
+    .set("Cookie", global.signin())
+    .send({ ticketId: ticket.id })
+    .expect(400);
+});
+
 it("emits an order created event", async () => {
   const ticket = Ticket.build({
     id: new mongoose.Types.ObjectId().toHexString(),

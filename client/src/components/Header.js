@@ -44,15 +44,22 @@ const Header = () => {
     }
   };
 
+  // This header is the client storefront's - the admin back office has
+  // its own separate header (see AdminHeader.js) and admins are sent
+  // there straight after signing in. If an admin ever ends up here
+  // anyway, point them back to their own area instead of showing the
+  // client's buy-tickets nav.
+  //
   // Same set of links drives both the desktop bar and the mobile menu, so
   // they can never drift apart (this used to be two separate hand-written
   // lists and the mobile one never actually navigated anywhere).
   const navLinks = isAuthenticated
-    ? [
-        { name: isAdmin ? "All orders" : "My orders", to: "/admin/orders" },
-        ...(isAdmin ? [{ name: "Sell ticket", to: "/create/ticket" }] : []),
-        { name: "Profile", to: "/profile" },
-      ]
+    ? isAdmin
+      ? [{ name: "Admin panel", to: "/admin" }]
+      : [
+          { name: "My orders", to: "/orders" },
+          { name: "Profile", to: "/profile" },
+        ]
     : [
         { name: "Sign In", to: "/sign-in" },
         { name: "Sign Up", to: "/sign-up" },
@@ -206,26 +213,25 @@ const Header = () => {
                     >
                       Profile
                     </MenuItem>,
-                    <MenuItem
-                      key="orders"
-                      component={Link}
-                      to="/admin/orders"
-                      onClick={handleCloseUserMenu}
-                    >
-                      {isAdmin ? "All Orders" : "My Orders"}
-                    </MenuItem>,
-                    ...(isAdmin
-                      ? [
-                          <MenuItem
-                            key="sell"
-                            component={Link}
-                            to="/create/ticket"
-                            onClick={handleCloseUserMenu}
-                          >
-                            Sell a ticket
-                          </MenuItem>,
-                        ]
-                      : []),
+                    isAdmin ? (
+                      <MenuItem
+                        key="admin"
+                        component={Link}
+                        to="/admin"
+                        onClick={handleCloseUserMenu}
+                      >
+                        Admin panel
+                      </MenuItem>
+                    ) : (
+                      <MenuItem
+                        key="orders"
+                        component={Link}
+                        to="/orders"
+                        onClick={handleCloseUserMenu}
+                      >
+                        My Orders
+                      </MenuItem>
+                    ),
                     <Divider key="divider" />,
                     <MenuItem
                       key="logout"

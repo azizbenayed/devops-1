@@ -95,3 +95,54 @@ it("publishes an event", async () => {
 
   expect(rabbitWrapper.client.publish).toHaveBeenCalled();
 });
+
+it("defaults quantity to 1 when none is provided", async () => {
+  const response = await request(app)
+    .post("/api/tickets")
+    .set("Cookie", global.signin())
+    .send({
+      title: "asldkfj",
+      price: 20,
+    })
+    .expect(201);
+
+  expect(response.body.quantity).toEqual(1);
+  expect(response.body.remaining).toEqual(1);
+});
+
+it("accepts a custom quantity so multiple clients can each buy a unit", async () => {
+  const response = await request(app)
+    .post("/api/tickets")
+    .set("Cookie", global.signin())
+    .send({
+      title: "asldkfj",
+      price: 20,
+      quantity: 5,
+    })
+    .expect(201);
+
+  expect(response.body.quantity).toEqual(5);
+  expect(response.body.remaining).toEqual(5);
+});
+
+it("rejects a quantity that isn't a positive whole number", async () => {
+  await request(app)
+    .post("/api/tickets")
+    .set("Cookie", global.signin())
+    .send({
+      title: "asldkfj",
+      price: 20,
+      quantity: 0,
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/api/tickets")
+    .set("Cookie", global.signin())
+    .send({
+      title: "asldkfj",
+      price: 20,
+      quantity: 1.5,
+    })
+    .expect(400);
+});

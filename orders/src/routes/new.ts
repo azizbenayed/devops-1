@@ -42,10 +42,12 @@ router.post(
       throw new NotFoundError();
     }
 
-    // Make sure that this ticket is not already reserved
-    const isReserved = await ticket.isReserved();
-    if (isReserved) {
-      throw new BadRequestError("Ticket is already reserved");
+    // Make sure this ticket still has an unsold unit left. Several
+    // different clients can each buy their own unit of the same ticket -
+    // this only blocks once every unit is taken.
+    const canReserve = await ticket.hasAvailability();
+    if (!canReserve) {
+      throw new BadRequestError("Ticket is sold out");
     }
 
     // Calculate an expiration date for this order
