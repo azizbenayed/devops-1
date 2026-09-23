@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import request from "supertest";
 import { app } from "../../app";
 import { Ticket } from "../../models/ticket";
@@ -17,6 +18,23 @@ it("can fetch a list of tickets", async () => {
   const response = await request(app).get("/api/tickets").send().expect(200);
 
   expect(response.body.length).toEqual(3);
+});
+
+it("still lists tickets created before stock existed (no quantity/reservedCount stored)", async () => {
+  // Insert straight into the collection to bypass the schema defaults,
+  // like a ticket that was saved before these fields were introduced.
+  const legacyId = new mongoose.Types.ObjectId();
+  await Ticket.collection.insertOne({
+    _id: legacyId,
+    title: "legacy",
+    price: 10,
+    userId: "someone",
+    version: 0,
+  });
+
+  const response = await request(app).get("/api/tickets").send().expect(200);
+
+  expect(response.body.map((t: any) => t.id)).toContain(legacyId.toHexString());
 });
 
 it("hides a ticket once every unit is reserved, but keeps a partially reserved one visible", async () => {
