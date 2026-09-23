@@ -12,6 +12,11 @@ pipeline {
         ODC_DATA = "/var/lib/jenkins/dependency-check-data"
         TRIVY_CACHE = "/tmp/trivy-cache"
         TRIVY_DB_REPOSITORY = "ghcr.io/aquasecurity/trivy-db"
+        // Vault's in-cluster Service IP (svc/vault, ns vault). k3s' kube-proxy
+        // makes ClusterIPs routable from the node itself, so Jenkins reaches
+        // Vault directly - unlike the old `kubectl port-forward` on
+        // localhost:8200, this survives vault-0 restarts and VM reboots.
+        VAULT_URL = "http://10.43.219.73:8200"
     }
 
     options {
@@ -43,9 +48,19 @@ pipeline {
 
         stage('Test Vault Only') {
             steps {
+                // After a reboot Vault can take a few minutes to come back and
+                // be unsealed; wait for it instead of failing on the first call.
+                timeout(time: 5, unit: 'MINUTES') {
+                    sh '''
+                    until curl -sf -m 5 "$VAULT_URL/v1/sys/health" >/dev/null; do
+                      echo "Waiting for Vault at $VAULT_URL (unreachable or sealed)..."
+                      sleep 10
+                    done
+                    '''
+                }
                 withVault(
                     configuration: [
-                        vaultUrl: 'http://localhost:8200',
+                        vaultUrl: env.VAULT_URL,
                         vaultCredentialId: 'vault-token',
                         engineVersion: 2
                     ],
@@ -141,13 +156,27 @@ CONFIGEOF
                 script {
                     def scannerHome = tool 'sonar-scanner'
                     withSonarQubeEnv('sonarqube') {
-                        sh """
-                        ${scannerHome}/bin/sonar-scanner \
-                          -Dsonar.projectKey=microservices-devops \
-                          -Dsonar.projectName=microservices-devops \
-                          -Dsonar.sources=. \
-                          -Dsonar.exclusions=**/node_modules/**,**/dependency-check-report/**,**/trivy-reports/**
-                        """
+                        // SonarQube runs on this same VM and is slow to answer
+                        // right after a reboot; wait until it reports UP, then
+                        // give its API calls more time than the 60s default.
+                        timeout(time: 10, unit: 'MINUTES') {
+                            sh '''
+                            until curl -s -m 10 "$SONAR_HOST_URL/api/system/status" | grep -q '"status":"UP"'; do
+                              echo "Waiting for SonarQube at $SONAR_HOST_URL..."
+                              sleep 10
+                            done
+                            '''
+                        }
+                        retry(2) {
+                            sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                              -Dsonar.ws.timeout=300 \
+                              -Dsonar.projectKey=microservices-devops \
+                              -Dsonar.projectName=microservices-devops \
+                              -Dsonar.sources=. \
+                              -Dsonar.exclusions=**/node_modules/**,**/dependency-check-report/**,**/trivy-reports/**
+                            """
+                        }
                     }
                 }
             }
@@ -271,7 +300,7 @@ CONFIGEOF
                     try {
                         withVault(
                             configuration: [
-                                vaultUrl: 'http://localhost:8200',
+                                vaultUrl: env.VAULT_URL,
                                 vaultCredentialId: 'vault-token',
                                 engineVersion: 2
                             ],
@@ -366,7 +395,9 @@ CONFIGEOF
 
     post {
         always {
-            sh 'docker logout || true'
+            // Docker Login writes this file itself; removing it is the
+            // logout, without `docker logout` probing the D-Bus helpers.
+            sh 'rm -f "$HOME/.docker/config.json"'
         }
 
         success {
@@ -419,7 +450,7 @@ CONFIGEOF
                     ]) {
                         withVault(
                             configuration: [
-                                vaultUrl: 'http://localhost:8200',
+                                vaultUrl: env.VAULT_URL,
                                 vaultCredentialId: 'vault-token',
                                 engineVersion: 2
                             ],
