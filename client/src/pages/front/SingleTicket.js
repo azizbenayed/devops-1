@@ -8,6 +8,7 @@ import useSingle from "../../hooks/useSingle";
 import EmptyState from "../../components/EmptyState";
 import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
+import apiFetch from "../../utils/api";
 
 const SingleTicket = () => {
   const { id } = useParams();
@@ -25,7 +26,7 @@ const SingleTicket = () => {
     if (buying) return; // guard against double-clicks
     setBuying(true);
     try {
-      const order = await fetch("/api/orders", {
+      const order = await apiFetch("/api/orders", {
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify({ ticketId: id }),

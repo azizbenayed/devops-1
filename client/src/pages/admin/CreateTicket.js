@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { isValidPrice, isValidQuantity } from "../../utils/validators";
+import apiFetch from "../../utils/api";
 
 const fieldSx = {
   mb: 3,
@@ -54,7 +55,7 @@ const CreateTicket = () => {
         body: JSON.stringify(ticket),
         headers: { "Content-Type": "application/json" },
       };
-      const value = await fetch("/api/tickets", options);
+      const value = await apiFetch("/api/tickets", options);
 
       const res = await value.json();
       if (res && res?.errors) {

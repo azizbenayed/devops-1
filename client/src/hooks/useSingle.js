@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import apiFetch from "../utils/api";
 
 const useSingle = (url) => {
   const [data, setData] = useState({});
@@ -14,7 +15,7 @@ const useSingle = (url) => {
     const fetchdata = async () => {
       try {
         setLoading(true);
-        const value = await fetch(url);
+        const value = await apiFetch(url);
         if (!value.ok) {
           throw new Error("An error occured");
         }

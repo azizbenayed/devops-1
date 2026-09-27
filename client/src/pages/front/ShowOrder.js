@@ -7,6 +7,7 @@ import Alert from "@mui/material/Alert";
 import CheckIcon from "@mui/icons-material/Check";
 import EmptyState from "../../components/EmptyState";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import apiFetch from "../../utils/api";
 
 const ShowOrder = () => {
   const { orderId } = useParams();
@@ -34,7 +35,7 @@ const ShowOrder = () => {
     if (payLoading) return;
     setPayLoading(true);
     try {
-      const payment = await fetch("/api/payments", {
+      const payment = await apiFetch("/api/payments", {
         method: "POST",
         body: JSON.stringify({
           orderId,

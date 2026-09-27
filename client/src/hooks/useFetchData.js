@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import apiFetch from "../utils/api";
 
 const useFetchData = (url) => {
   const [data, setData] = useState([]);
@@ -11,7 +12,7 @@ const useFetchData = (url) => {
     const fetchdata = async () => {
       try {
         setLoading(true);
-        const value = await fetch(url);
+        const value = await apiFetch(url);
         if (!value.ok) {
           throw new Error("An error occured");
         }
