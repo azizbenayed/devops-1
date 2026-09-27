@@ -36,6 +36,21 @@ app.all("*", async (req, res) => {
   throw new NotFoundError();
 });
 
+// The shared errorHandler turns any non-CustomError (e.g. a Stripe API
+// failure) into a bare 400 "Something went wrong" without logging it, so
+// log the real cause here before handing off.
+app.use(
+  (
+    err: Error,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    console.error(`${req.method} ${req.path} failed:`, err.message);
+    next(err);
+  }
+);
+
 app.use(errorHandler);
 
 export { app };
