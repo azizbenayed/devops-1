@@ -6,7 +6,9 @@ export class OrderCreatedListener extends Consumer<OrderCreatedEvent> {
   readonly exchangeName = ExchangeNames.OrderCreated;
   routingKey = "ordersKeyCreate";
   exchangeType = "direct";
-  queueName = "ordersQueueCreate";
+  // Must be unique per service: services sharing a queue name compete for
+  // its messages, so each event would reach only one of them.
+  queueName = "ticketsOrderCreatedQueue";
 
   async onMessage(data: OrderCreatedEvent["data"]) {
     // Find the ticket that the order is reserving

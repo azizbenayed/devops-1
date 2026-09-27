@@ -11,7 +11,9 @@ export class OrderCancelledListener extends Consumer<OrderCancelledEvent> {
   readonly exchangeName = ExchangeNames.OrderCancelled;
   routingKey = "ordersKeyCancel";
   exchangeType = "direct";
-  queueName = "ordersQueueCancel";
+  // Must be unique per service: services sharing a queue name compete for
+  // its messages, so each event would reach only one of them.
+  queueName = "paymentsOrderCancelledQueue";
 
   async onMessage(data: OrderCancelledEvent["data"]) {
     const order = await Order.findOne({
