@@ -3,6 +3,7 @@ import {
   requireAuth,
   NotFoundError,
   NotAuthorizedError,
+  BadRequestError,
 } from "@eftickets/common";
 import { Order, OrderStatus } from "../models/order";
 import { OrderCancelledPublisher } from "../events/publishers/order-cancelled-publisher";
@@ -21,8 +22,16 @@ router.delete(
     if (!order) {
       throw new NotFoundError();
     }
-    if (order.userId !== req.currentUser!.id) {
+    // Admins manage every order, not just their own (they can't place
+    // orders in the first place - see orders/routes/new.ts).
+    const isAdmin = (req.currentUser as any)?.role === "admin";
+    if (!isAdmin && order.userId !== req.currentUser!.id) {
       throw new NotAuthorizedError();
+    }
+    // A paid order needs a refund process, not a cancel button - and a
+    // cancelled one has nothing left to cancel.
+    if (order.status !== OrderStatus.Created && order.status !== OrderStatus.AwaitingPayment) {
+      throw new BadRequestError("This order can no longer be cancelled");
     }
     order.status = OrderStatus.Cancelled;
     await order.save();

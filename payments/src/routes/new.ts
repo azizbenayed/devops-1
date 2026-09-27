@@ -11,8 +11,6 @@ import {
 import { stripe } from "../stripe";
 import { Order } from "../models/order";
 import { Payment } from "../models/payment";
-import { PaymentCreatedPublisher } from "../events/publishers/payment-created-publisher";
-import { rabbitWrapper } from "../rabbit-wrapper";
 
 const router = express.Router();
 
@@ -22,14 +20,9 @@ router.post(
   [body("orderId").not().isEmpty().withMessage("OrderId is required")],
   validateRequest,
   async (req: Request, res: Response) => {
-    console.log("PAYMENT BODY:", req.body);
-    console.log("CURRENT USER:", req.currentUser);
-
     const { orderId } = req.body;
 
     const order = await Order.findById(orderId);
-
-    console.log("FOUND ORDER:", order);
 
     if (!order) {
       throw new NotFoundError();
@@ -44,12 +37,6 @@ router.post(
     }
 
     const amount = order.price * 100;
-
-    console.log("CREATE STRIPE CHECKOUT SESSION:", {
-      orderId,
-      amount,
-      ticketPrice: order.price,
-    });
 
     // Configurable so this isn't stuck pointing at one environment, but
     // falls back to the current known-good URL if unset.
@@ -76,20 +63,19 @@ router.post(
       cancel_url: `${clientUrl}/payment/cancel?orderId=${orderId}`,
     });
 
-    console.log("STRIPE SESSION CREATED:", session.id);
-
+    // Only records that a checkout session was started - the order isn't
+    // marked paid yet. That only happens once the client lands back on
+    // the success page and /api/payments/verify confirms with Stripe that
+    // the card actually went through (see routes/verify.ts). Firing
+    // PaymentCreated here, before the buyer has even entered card
+    // details, used to mark orders "complete" whether or not they ever
+    // paid.
     const payment = Payment.build({
       orderId,
       stripeId: session.id,
     });
 
     await payment.save();
-
-    await new PaymentCreatedPublisher(rabbitWrapper.client).publish({
-      id: payment.id,
-      orderId: payment.orderId,
-      stripeId: payment.stripeId,
-    });
 
     res.status(201).send({ url: session.url });
   }

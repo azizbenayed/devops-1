@@ -8,6 +8,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import EmptyState from "../../components/EmptyState";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import apiFetch from "../../utils/api";
+import { toast } from "react-toastify";
 
 const ShowOrder = () => {
   const { orderId } = useParams();
@@ -45,17 +46,24 @@ const ShowOrder = () => {
         headers: { "Content-Type": "application/json" },
       });
 
+      const res = await payment.json();
+
       if (!payment.ok) {
-        throw new Error(`payment status: ${payment.status}`);
+        const errorResponse = res?.errors?.map((err) => err.message)?.join(" ");
+        toast.error(errorResponse || "Couldn't start the payment, please try again.");
+        setPayLoading(false);
+        return;
       }
 
-      const res = await payment.json();
       if (res?.url) {
         window.location.href = res.url;
         return;
       }
+
+      toast.error("Couldn't start the payment, please try again.");
     } catch (error) {
       console.log(error);
+      toast.error("Something went wrong, please try again.");
     }
     setPayLoading(false);
   };

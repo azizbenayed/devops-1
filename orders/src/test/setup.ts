@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 
 declare global {
-  var signin: () => string[];
+  var signin: (opts?: { id?: string; email?: string; role?: string }) => string[];
 }
 
 jest.mock("../rabbit-wrapper");
@@ -37,14 +37,13 @@ afterAll(async () => {
   await mongoose.connection.close();
 });
 
-global.signin = () => {
-  // Build a JWT payload.  { id, email }
+global.signin = (opts) => {
+  // Build a JWT payload.  { id, email, role }
   const payload = {
-    id: new mongoose.Types.ObjectId().toHexString(),
-    email: "test@test.com",
+    id: opts?.id || new mongoose.Types.ObjectId().toHexString(),
+    email: opts?.email || "test@test.com",
+    role: opts?.role || "client",
   };
-  // Build a JWT payload.  { id, email }
-  //process.env.JWT_KEY = "asdfasdf";
 
   // Create the JWT!
   const token = jwt.sign(payload, process.env.JWT_KEY!);

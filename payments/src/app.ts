@@ -9,6 +9,7 @@ import {
   isAuthenticated,
 } from "@eftickets/common";
 import { createChargeRouter } from "./routes/new";
+import { verifyPaymentRouter } from "./routes/verify";
 
 const app = express();
 app.set("trust proxy", true);
@@ -29,6 +30,7 @@ app.get("/readyz", (req, res) => {
 
 app.use(isAuthenticated);
 app.use(createChargeRouter);
+app.use(verifyPaymentRouter);
 
 app.all("*", async (req, res) => {
   throw new NotFoundError();

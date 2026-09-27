@@ -8,6 +8,10 @@ interface PaymentAttrs {
 interface PaymentDoc extends mongoose.Document {
   orderId: string;
   stripeId: string;
+  // Flips to true once we've verified the Stripe session actually paid
+  // and published PaymentCreated - keeps a page reload or a retried
+  // verification call from firing that event twice for the same payment.
+  confirmed: boolean;
 }
 
 interface PaymentModel extends mongoose.Model<PaymentDoc> {
@@ -23,6 +27,11 @@ const paymentSchema = new mongoose.Schema(
     stripeId: {
       required: true,
       type: String,
+    },
+    confirmed: {
+      type: Boolean,
+      required: true,
+      default: false,
     },
   },
   {

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Box, Button, Chip, Container, Skeleton, Typography } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Layout from "./Layout";
 import useSingle from "../../hooks/useSingle";
+import apiFetch from "../../utils/api";
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
@@ -11,19 +12,57 @@ const PaymentSuccess = () => {
   const { data: order, loading, refetch } = useSingle(
     orderId ? `/api/orders/${orderId}` : ""
   );
+  const [verifying, setVerifying] = useState(Boolean(orderId));
+
+  // Landing here only means Stripe redirected the browser back - it
+  // doesn't mean the card actually went through. Ask the payments service
+  // to check the session with Stripe directly and flip the order to
+  // "complete" if (and only if) it really paid, then re-read the order so
+  // the status below reflects what actually happened.
+  useEffect(() => {
+    if (!orderId) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await apiFetch("/api/payments/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId }),
+        });
+      } catch (error) {
+        console.log(error);
+      } finally {
+        if (!cancelled) {
+          setVerifying(false);
+          refetch();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
 
   // The order's status is flipped by an event coming through RabbitMQ, so
-  // it can lag a beat behind the Stripe redirect landing here. One retry
-  // a couple of seconds later is enough to pick up a "complete" status
-  // that wasn't there yet on the first load, without polling forever.
+  // it can lag a beat behind the verification call above. One retry a
+  // couple of seconds later is enough to pick up a "complete" status that
+  // wasn't there yet on the first load, without polling forever.
   const retried = useRef(false);
   useEffect(() => {
-    if (order?.status && order.status !== "complete" && !retried.current) {
+    if (
+      !verifying &&
+      order?.status &&
+      order.status !== "complete" &&
+      !retried.current
+    ) {
       retried.current = true;
       const timer = setTimeout(() => refetch(), 2000);
       return () => clearTimeout(timer);
     }
-  }, [order?.status, refetch]);
+  }, [verifying, order?.status, refetch]);
 
   return (
     <Layout>
@@ -54,7 +93,7 @@ const PaymentSuccess = () => {
                 <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
                   Your payment went through. Check your orders for the details.
                 </Typography>
-              ) : loading ? (
+              ) : loading || verifying ? (
                 <Box sx={{ mt: 2 }}>
                   <Skeleton variant="text" width="60%" sx={{ mx: "auto", bgcolor: "rgba(255,255,255,0.1)" }} />
                   <Skeleton variant="text" width="40%" sx={{ mx: "auto", bgcolor: "rgba(255,255,255,0.1)" }} />
