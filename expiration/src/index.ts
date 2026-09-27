@@ -21,7 +21,11 @@ const start = async () => {
 
     new OrderCreatedListener(rabbitWrapper.client).consumeMessage();
   } catch (err) {
+    // Exit instead of carrying on half-connected: at boot DNS or RabbitMQ
+    // may not be ready yet, and Kubernetes will restart us with backoff
+    // until they are. Staying up here left the service silently broken.
     console.error(err);
+    process.exit(1);
   }
 };
 
